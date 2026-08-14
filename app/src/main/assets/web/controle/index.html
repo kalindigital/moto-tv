@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="pt-br">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+  <title>Controle — Moto TV</title>
+  <style>
+    html,body{margin:0;height:100%;background:#0b0b12;color:#fff;font-family:system-ui,sans-serif;
+      display:flex;flex-direction:column;align-items:center;justify-content:center;gap:20px;overflow:hidden}
+    button{font-size:20px;padding:16px 28px;border:0;border-radius:14px;background:#6E29F6;color:#fff}
+    button:active{filter:brightness(.85)}
+    #status{position:fixed;top:10px;right:14px;font-size:14px}
+    .dot{display:inline-block;width:10px;height:10px;border-radius:50%;background:#e33;margin-right:6px}
+    .dot.on{background:#3c3}
+    #bar{width:70vw;height:16px;background:#222;border-radius:8px;overflow:hidden}
+    #fill{height:100%;width:50%;background:#6E29F6;transition:width .05s linear}
+    .row{display:flex;gap:14px}
+  </style>
+</head>
+<body>
+  <div id="status"><span class="dot" id="dot"></span><span id="conn">desconectado</span></div>
+  <button id="start">Ativar controle</button>
+  <div id="bar"><div id="fill"></div></div>
+  <div class="row">
+    <button id="calib">Calibrar</button>
+    <button id="restart">Reiniciar</button>
+  </div>
+  <script type="module" src="./controle.js"></script>
+</body>
+</html>
