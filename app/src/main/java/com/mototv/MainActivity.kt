@@ -32,13 +32,17 @@ class MainActivity : Activity() {
         val controllerUrl = NetworkUtils.resolveControllerUrl(ip, HTTPS_PORT, devOverrideIp)
         val keyStore = CertFactory.buildKeyStore("moto", keyPass, listOf(ip, "127.0.0.1"))
 
-        server = GameServer(
-            assets = AndroidAssetReader(this),
-            config = ServerConfig(controllerUrl),
-            keyStore = keyStore,
-            keyAlias = "moto",
-            keyPassword = keyPass,
-        ).also { it.start() }
+        try {
+            server = GameServer(
+                assets = AndroidAssetReader(this),
+                config = ServerConfig(controllerUrl),
+                keyStore = keyStore,
+                keyAlias = "moto",
+                keyPassword = keyPass,
+            ).also { it.start() }
+        } catch (e: Exception) {
+            android.util.Log.e("MainActivity", "Falha ao iniciar o servidor local", e)
+        }
 
         webView = WebView(this).apply {
             settings.javaScriptEnabled = true

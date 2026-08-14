@@ -1,6 +1,6 @@
 # Moto TV
 
-Jogo de moto em 3D que roda numa **Android TV** e é controlado por um **iPhone** pela rede WiFi local. A TV mostra o jogo (Three.js) em tela cheia junto com um **QR code**; o celular abre a página de controle no navegador, usa o **acelerômetro/giroscópio** para virar a moto e conversa com a TV por WebSocket. Sem app no celular, sem nuvem: tudo acontece na rede local.
+Jogo de moto em 3D que roda numa **Android TV** e é controlado por um **iPhone** pela rede WiFi local. A TV mostra o jogo (Three.js) em tela cheia junto com um **QR code**; o celular abre a página de controle no navegador, usa o **acelerômetro/giroscópio** para virar a moto e conversa com a TV por WebSocket. Sem app no celular, sem nuvem: tudo acontece na rede local. Por isso, **qualquer dispositivo na mesma rede WiFi** pode abrir o jogo e enviar comandos de virar/reiniciar — não há autenticação, e isso é intencional para uma rede local de confiança.
 
 ## Arquitetura em uma frase
 

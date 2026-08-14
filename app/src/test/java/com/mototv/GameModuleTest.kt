@@ -45,4 +45,9 @@ class GameModuleTest {
         application { gameModule(FakeAssets(emptyMap()), ServerConfig("u")) }
         assertEquals(HttpStatusCode.NotFound, client.get("/game/nao-existe.js").status)
     }
+
+    @Test fun path_traversal_da_404() = testApplication {
+        application { gameModule(FakeAssets(emptyMap()), ServerConfig("u")) }
+        assertEquals(HttpStatusCode.NotFound, client.get("/game/%2e%2e/secret.txt").status)
+    }
 }

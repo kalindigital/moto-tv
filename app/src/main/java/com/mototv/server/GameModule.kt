@@ -31,6 +31,10 @@ fun Application.gameModule(assets: AssetReader, config: ServerConfig) {
                 parts.size == 1 && parts[0] == "controle" -> "controle/index.html"
                 else -> parts.joinToString("/")
             }
+            if (rel.contains("..")) {
+                call.respond(HttpStatusCode.NotFound)
+                return@get
+            }
             val bytes = assets.read(rel)
             if (bytes == null) call.respond(HttpStatusCode.NotFound)
             else call.respondBytes(bytes, contentTypeFor(rel))
