@@ -14,5 +14,8 @@
 - [x] QR code na tela do jogo
 - [x] Página de controle no iPhone (permissão, gamma→steer, WebSocket, calibrar, reiniciar)
 - [x] Testes JS (steer, colisão AABB, mensagens)
-- [x] Testes Kotlin (relay Ktor, NetworkUtils)
-- [ ] Checklist de validação manual (render + sensor real)
+- [x] Testes Kotlin (rotas, relay, NetworkUtils)
+- [x] Trocar o Ktor por NanoHTTPD + TLS (Netty quebra no Android; CIO não faz HTTPS)
+- [x] Porta HTTPS 8443 → 8444 (o receptor de Cast do Android TV já ocupa a 8443)
+- [x] Validar em runtime no emulador de Android TV (jogo renderiza, relay WebSocket entrega)
+- [ ] Checklist de validação manual (render + sensor real no iPhone)

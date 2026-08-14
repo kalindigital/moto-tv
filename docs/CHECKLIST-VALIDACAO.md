@@ -2,7 +2,7 @@
 
 Passo a passo para conferir, na mão, o que os testes automatizados não cobrem (render 3D e sensor real). Marque cada item ao validar.
 
-Pré-condições: AVD de Android TV (API 34) rodando com o app instalado; iPhone na **mesma WiFi** do Mac. Para o loop do iPhone com o emulador, `devOverrideIp` setado com o IP do Mac e `adb forward tcp:8443 tcp:8443` ativo (ver README).
+Pré-condições: AVD de Android TV (API 34) rodando com o app instalado; iPhone na **mesma WiFi** do Mac. Para o loop do iPhone com o emulador, `devOverrideIp` setado com o IP do Mac e `adb forward tcp:8444 tcp:8444` ativo (ver README).
 
 ## 1. Smoke no emulador
 

@@ -4,7 +4,7 @@ Jogo de moto em 3D que roda numa **Android TV** e é controlado por um **iPhone*
 
 ## Arquitetura em uma frase
 
-O app Android TV embute um servidor **Ktor (HTTPS na porta 8443)** que serve o jogo (`/`), a página de controle (`/controle`), a config (`/config`) e um **relay WebSocket** (`/ws`). A WebView da TV carrega o jogo; o iPhone carrega `/controle`; as inclinações do celular chegam à TV pelo `/ws`.
+O app Android TV embute um servidor **NanoHTTPD (HTTPS na porta 8444)** que serve o jogo (`/`), a página de controle (`/controle`), a config (`/config`) e um **relay WebSocket** (`/ws`). A WebView da TV carrega o jogo; o iPhone carrega `/controle`; as inclinações do celular chegam à TV pelo `/ws`.
 
 ## Pré-requisitos
 
@@ -49,13 +49,13 @@ Duas suítes, ambas devem ficar verdes:
 
   Atual: **15 testes** passando (`collision` 4 + `steering` 6 + `protocol` 5).
 
-- **Android (JUnit)** — servidor Ktor, relay, config, certificado e utilidades de rede:
+- **Android (JUnit)** — rotas do servidor, relay, config, certificado e utilidades de rede:
 
   ```bash
   ./gradlew testDebugUnitTest
   ```
 
-  Atual: **11 testes** passando (`NetworkUtilsTest` 4 + `GameModuleTest` 4 + `RelayHubTest` 1 + `ServerConfigTest` 1 + `CertFactoryTest` 1).
+  Atual: **17 testes** passando (`RouteResolverTest` 6 + `NetworkUtilsTest` 4 + `RelayRegistryTest` 3 + `ReadinessTest` 2 + `ServerConfigTest` 1 + `CertFactoryTest` 1).
 
 ## Rodar no emulador de Android TV
 
@@ -63,7 +63,7 @@ Duas suítes, ambas devem ficar verdes:
 2. No Device Manager, inicie o **AVD de Android TV (API 34)**.
 3. Clique em **Run**.
 
-O app sobe o servidor **HTTPS na porta 8443** e a WebView mostra o jogo em tela cheia (landscape) com o **QR code** sobreposto. Só com o teclado você já consegue jogar (ver abaixo).
+O app sobe o servidor **HTTPS na porta 8444** e a WebView mostra o jogo em tela cheia (landscape) com o **QR code** sobreposto. Só com o teclado você já consegue jogar (ver abaixo).
 
 ### Fallback de teclado (sem celular)
 
@@ -81,9 +81,9 @@ O iPhone **não alcança** o servidor que está **dentro** do emulador (o AVD te
    pelo **IP do seu Mac na WiFi**, ex.: `"192.168.1.50"`. (No repositório ele fica sempre `null`; edite apenas localmente.)
 2. Rebuilde/rode no AVD e, no Mac, exponha a porta do emulador para o host:
    ```bash
-   adb forward tcp:8443 tcp:8443
+   adb forward tcp:8444 tcp:8444
    ```
-3. Com isso o QR passa a apontar para `https://<ip-do-mac>:8443/controle`. No iPhone (mesma WiFi):
+3. Com isso o QR passa a apontar para `https://<ip-do-mac>:8444/controle`. No iPhone (mesma WiFi):
    - **Escaneie o QR** (ou digite a URL no Safari).
    - **Aceite o certificado autoassinado** uma vez ("Mostrar detalhes" → "Visitar este site"). Esse aviso é **esperado** — o servidor local usa um cert autoassinado.
    - Toque em **Ativar controle** e **permita o movimento**.
