@@ -7,12 +7,9 @@ import android.os.Bundle
 import android.webkit.SslErrorHandler
 import android.webkit.WebView
 import android.webkit.WebViewClient
-import com.mototv.cert.CertFactory
-import com.mototv.net.NetworkUtils
-import com.mototv.server.AndroidAssetReader
-import com.mototv.server.GameServer
 import com.mototv.server.HTTPS_PORT
-import com.mototv.server.ServerConfig
+import com.mototv.server.Readiness
+import com.mototv.server.ServerHolder
 
 class MainActivity : Activity() {
 
@@ -21,28 +18,10 @@ class MainActivity : Activity() {
     private val devOverrideIp: String? = null
 
     private lateinit var webView: WebView
-    private var server: GameServer? = null
-    private val keyPass = "changeit".toCharArray()
 
     @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-
-        val ip = NetworkUtils.pickSiteLocalIpv4(NetworkUtils.localIpAddresses()) ?: "127.0.0.1"
-        val controllerUrl = NetworkUtils.resolveControllerUrl(ip, HTTPS_PORT, devOverrideIp)
-        val keyStore = CertFactory.buildKeyStore("moto", keyPass, listOf(ip, "127.0.0.1"))
-
-        try {
-            server = GameServer(
-                assets = AndroidAssetReader(this),
-                config = ServerConfig(controllerUrl),
-                keyStore = keyStore,
-                keyAlias = "moto",
-                keyPassword = keyPass,
-            ).also { it.start() }
-        } catch (e: Exception) {
-            android.util.Log.e("MainActivity", "Falha ao iniciar o servidor local", e)
-        }
 
         webView = WebView(this).apply {
             settings.javaScriptEnabled = true
@@ -56,11 +35,41 @@ class MainActivity : Activity() {
             }
         }
         setContentView(webView)
-        webView.loadUrl("https://127.0.0.1:$HTTPS_PORT/")
+        webView.loadDataWithBaseURL(null, statusHtml("Iniciando o jogo…"), "text/html", "utf-8", null)
+
+        // Geração da chave + start do servidor são pesados e travariam a UI thread (ANR).
+        // O servidor é um singleton de processo (ver ServerHolder): subir aqui é
+        // idempotente e seguro mesmo se o onCreate rodar mais de uma vez.
+        val appContext = applicationContext
+        val dev = devOverrideIp
+        Thread {
+            try {
+                ServerHolder.ensureStarted(appContext, dev)
+                val ready = Readiness.awaitPortOpen("127.0.0.1", HTTPS_PORT, 15000)
+                runOnUiThread {
+                    if (ready) {
+                        webView.loadUrl("https://127.0.0.1:$HTTPS_PORT/")
+                    } else {
+                        webView.loadDataWithBaseURL(
+                            null, statusHtml("O servidor local não respondeu a tempo."),
+                            "text/html", "utf-8", null,
+                        )
+                    }
+                }
+            } catch (e: Exception) {
+                android.util.Log.e("MainActivity", "Falha ao iniciar o servidor local", e)
+                runOnUiThread {
+                    webView.loadDataWithBaseURL(
+                        null, statusHtml("Erro ao iniciar o servidor local."),
+                        "text/html", "utf-8", null,
+                    )
+                }
+            }
+        }.start()
     }
 
-    override fun onDestroy() {
-        server?.stop()
-        super.onDestroy()
-    }
+    private fun statusHtml(msg: String): String =
+        "<!doctype html><html><body style=\"margin:0;background:#0b0b12;color:#fff;" +
+            "font-family:sans-serif;display:flex;align-items:center;justify-content:center;" +
+            "height:100vh\"><h2>$msg</h2></body></html>"
 }
