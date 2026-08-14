@@ -30,6 +30,11 @@ class GameServer(
     private val config: ServerConfig,
     keyStore: KeyStore,
     keyPassword: CharArray,
+    /**
+     * Lida a cada requisição, não guardada: a checagem de atualização roda em
+     * paralelo ao start do servidor e pode terminar depois dele.
+     */
+    private val atualizacao: () -> UpdateStatus = { UpdateStatus(disponivel = false) },
 ) : NanoWSD("0.0.0.0", HTTPS_PORT) {
 
     private val peers = RelayRegistry<WebSocket>()
@@ -55,6 +60,9 @@ class GameServer(
         when (val route = RouteResolver.resolve(session.uri)) {
             is Route.Config -> NanoHTTPD.newFixedLengthResponse(
                 Response.Status.OK, "application/json", config.toJson(),
+            )
+            is Route.Update -> NanoHTTPD.newFixedLengthResponse(
+                Response.Status.OK, "application/json", atualizacao().toJson(),
             )
             is Route.Asset -> assets.read(route.relPath)?.let { bytes ->
                 NanoHTTPD.newFixedLengthResponse(

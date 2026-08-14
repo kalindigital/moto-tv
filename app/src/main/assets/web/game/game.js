@@ -89,6 +89,55 @@ function setOverlay(show, msg) {
   if (msg) document.getElementById('msg').textContent = msg
 }
 
+// ---- banner de atualização ----
+// A checagem no GitHub roda em paralelo ao start do servidor e pode terminar
+// depois desta página carregar; por isso a consulta se repete algumas vezes.
+let atualizacao = null      // { versao, changelog } quando há versão nova
+let atualizando = false     // download em andamento (o banner para de aceitar OK)
+let tentativasUpdate = 0
+
+function mostrarBanner(texto) {
+  const b = document.getElementById('update')
+  b.textContent = texto
+  b.classList.remove('hidden')
+}
+
+function checarAtualizacao() {
+  fetch('/update')
+    .then((r) => r.json())
+    .then((u) => {
+      if (u && u.disponivel) {
+        atualizacao = u
+        mostrarBanner(`Nova versão ${u.versao} disponível — pressione OK para atualizar`)
+        return
+      }
+      reagendarChecagem()
+    })
+    .catch(reagendarChecagem)
+}
+
+function reagendarChecagem() {
+  tentativasUpdate += 1
+  if (tentativasUpdate < 6) setTimeout(checarAtualizacao, 5000)
+}
+
+function iniciarAtualizacao() {
+  // A ponte só existe dentro do app Android; no navegador o banner é informativo.
+  if (!window.MotoTV || typeof window.MotoTV.baixarAtualizacao !== 'function') return
+  atualizando = true
+  mostrarBanner('Baixando atualização… 0%')
+  window.MotoTV.baixarAtualizacao()
+}
+
+// Chamadas pelo app (WebView.evaluateJavascript) durante o download.
+window.__updateProgress = (pct) => mostrarBanner(`Baixando atualização… ${pct}%`)
+window.__updateFalhou = () => {
+  atualizando = false
+  mostrarBanner('Falha ao baixar a atualização — pressione OK para tentar de novo')
+}
+
+checarAtualizacao()
+
 // ---- config + QR ----
 fetch('/config').then((r) => r.json()).then((cfg) => {
   // eslint-disable-next-line no-new
@@ -116,7 +165,13 @@ connectWs()
 addEventListener('keydown', (e) => {
   if (e.key === 'ArrowLeft') { steer = -1; if (state === 'aguardando') resetGame() }
   if (e.key === 'ArrowRight') { steer = 1; if (state === 'aguardando') resetGame() }
-  if (e.key === 'Enter' && state === 'crashed') resetGame()
+  if (e.key === 'Enter') {
+    // O OK do controle da TV chega como Enter. Enquanto houver atualização à
+    // espera de confirmação, ele é do banner; depois volta a ser do jogo.
+    // As setas (jogabilidade) nunca são tocadas por isso.
+    if (atualizacao && !atualizando) { iniciarAtualizacao(); return }
+    if (state === 'crashed') resetGame()
+  }
 })
 addEventListener('keyup', (e) => {
   if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') steer = 0

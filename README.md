@@ -4,7 +4,7 @@ Jogo de moto em 3D que roda numa **Android TV** e é controlado por um **iPhone*
 
 ## Arquitetura em uma frase
 
-O app Android TV embute um servidor **NanoHTTPD (HTTPS na porta 8444)** que serve o jogo (`/`), a página de controle (`/controle`), a config (`/config`) e um **relay WebSocket** (`/ws`). A WebView da TV carrega o jogo; o iPhone carrega `/controle`; as inclinações do celular chegam à TV pelo `/ws`.
+O app Android TV embute um servidor **NanoHTTPD (HTTPS na porta 8444)** que serve o jogo (`/`), a página de controle (`/controle`), a config (`/config`), o estado da atualização (`/update`) e um **relay WebSocket** (`/ws`). A WebView da TV carrega o jogo; o iPhone carrega `/controle`; as inclinações do celular chegam à TV pelo `/ws`.
 
 ## Pré-requisitos
 
@@ -55,7 +55,7 @@ Duas suítes, ambas devem ficar verdes:
   ./gradlew testDebugUnitTest
   ```
 
-  Atual: **17 testes** passando (`RouteResolverTest` 6 + `NetworkUtilsTest` 4 + `RelayRegistryTest` 3 + `ReadinessTest` 2 + `ServerConfigTest` 1 + `CertFactoryTest` 1).
+  Atual: **33 testes** passando (`GithubUpdatesTest` 12 + `RouteResolverTest` 7 + `NetworkUtilsTest` 4 + `RelayRegistryTest` 3 + `UpdateStatusTest` 3 + `ReadinessTest` 2 + `ServerConfigTest` 1 + `CertFactoryTest` 1).
 
 ## Rodar no emulador de Android TV
 
@@ -68,7 +68,7 @@ O app sobe o servidor **HTTPS na porta 8444** e a WebView mostra o jogo em tela 
 ### Fallback de teclado (sem celular)
 
 - **← / →**: viram a moto. Com o jogo em espera, também iniciam a corrida.
-- **Enter**: reinicia após bater.
+- **Enter** (o **OK** do controle da TV): confirma a atualização quando o banner está na tela; fora disso, reinicia após bater.
 
 ## Fluxo de desenvolvimento: emulador ↔ iPhone (o pulo do gato)
 
@@ -92,6 +92,35 @@ O iPhone **não alcança** o servidor que está **dentro** do emulador (o AVD te
 ### Numa Android TV real
 
 Deixe `devOverrideIp = null`. O app descobre sozinho o **IP dele na WiFi** (`NetworkUtils.pickSiteLocalIpv4`) e monta o QR com esse endereço — sem `adb forward`. O iPhone só precisa estar na mesma rede e aceitar o cert autoassinado uma vez.
+
+## Atualização automática (GitHub Releases)
+
+Ao abrir, o app consulta `https://api.github.com/repos/kalindigital/moto-tv/releases/latest` numa thread de fundo e compara a tag (`v0.2.0` → `0.2.0`) com o `versionName` instalado, **número a número** — `1.10.0` é mais novo que `1.9.0`, o que a ordem alfabética erraria. Havendo versão nova com um `.apk` anexado, o resultado fica no `UpdateHolder` e a rota `GET /update` passa a devolver:
+
+```json
+{"disponivel":true,"versao":"0.2.0","changelog":"- ..."}
+```
+
+O jogo consulta essa rota ao carregar (e repete a cada 5 s, até 6 vezes, porque a checagem de rede pode terminar depois da página) e mostra uma **faixa roxa no topo**: *"Nova versão 0.2.0 disponível — pressione OK para atualizar"*. O **OK/Enter** chama `window.MotoTV.baixarAtualizacao()` (ponte `@JavascriptInterface` da `MainActivity`); o download roda em thread de fundo e devolve o progresso à faixa por `window.__updateProgress(pct)`. Terminado, o app abre o instalador do sistema via `FileProvider` (autoridade `com.mototv.updates`). **O jogo continua jogável o tempo todo** — as setas nunca são desviadas para o banner.
+
+## Publicar uma versão
+
+A assinatura fica **fora do repositório**. O `app/build.gradle.kts` lê, nesta ordem: propriedade do Gradle → variável de ambiente → padrão.
+
+| Propriedade | Padrão |
+| --- | --- |
+| `MOTOTV_KEYSTORE` | `~/.android-keystores/moto-tv-release.jks` |
+| `MOTOTV_KEY_ALIAS` | `mototv` |
+| `MOTOTV_STORE_PASSWORD` | — (obrigatória) |
+| `MOTOTV_KEY_PASSWORD` | — (obrigatória) |
+
+As **senhas moram em `~/.gradle/gradle.properties`** (arquivo do usuário, nunca do projeto). Se o `.jks` não existir na máquina, o `signingConfig` nem é montado — `assembleDebug` continua funcionando para quem clonar o repositório.
+
+```bash
+./publicar.sh 0.2.0 "- Banner de atualização no jogo"
+```
+
+O script sobe o `versionCode` (+1) e o `versionName`, roda os testes, compila o APK **assinado**, commita, cria a tag `v0.2.0`, dá push e publica o release no GitHub com dois anexos: `moto-tv-0.2.0.apk` (histórico) e `moto-tv.apk` (URL fixa). O APK **nunca** é versionado (está no `.gitignore`).
 
 ## Validação manual
 

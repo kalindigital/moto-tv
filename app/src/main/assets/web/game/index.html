@@ -11,9 +11,14 @@
     #overlay.hidden{display:none}
     #qr{background:#fff;padding:12px;border-radius:10px}
     h2{margin:0}
+    /* Faixa discreta no topo, acima do overlay, avisando da nova versão. */
+    #update{position:fixed;top:0;left:0;right:0;z-index:10;padding:10px 16px;text-align:center;
+      font-size:20px;background:rgba(110,41,246,.92);box-shadow:0 2px 12px rgba(0,0,0,.5)}
+    #update.hidden{display:none}
   </style>
 </head>
 <body>
+  <div id="update" class="hidden"></div>
   <div id="overlay">
     <h2 id="msg">Aponte o celular para o QR e toque em "Ativar controle"</h2>
     <div id="qr"></div>

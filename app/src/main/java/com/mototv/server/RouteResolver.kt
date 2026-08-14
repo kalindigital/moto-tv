@@ -8,6 +8,9 @@ sealed class Route {
     /** GET /config -> JSON com a URL do controle. */
     object Config : Route()
 
+    /** GET /update -> JSON com a atualização disponível (ou a ausência dela). */
+    object Update : Route()
+
     /** WS /ws -> relay entre celular e jogo. */
     object Ws : Route()
 
@@ -38,6 +41,7 @@ object RouteResolver {
             "" -> Route.Redirect("/game/index.html")
             "controle", "controle/" -> Route.Redirect("/controle/index.html")
             "config" -> Route.Config
+            "update" -> Route.Update
             "ws" -> Route.Ws
             else -> Route.Asset(rel)
         }

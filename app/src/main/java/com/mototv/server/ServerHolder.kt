@@ -3,6 +3,7 @@ package com.mototv.server
 import android.content.Context
 import com.mototv.cert.CertFactory
 import com.mototv.net.NetworkUtils
+import com.mototv.update.UpdateHolder
 
 /**
  * Servidor local como singleton de processo. A Activity pode ser recriada
@@ -25,6 +26,11 @@ object ServerHolder {
             config = ServerConfig(controllerUrl),
             keyStore = keyStore,
             keyPassword = keyPass,
+            atualizacao = {
+                UpdateHolder.info
+                    ?.let { UpdateStatus(true, it.version, it.changelog) }
+                    ?: UpdateStatus(disponivel = false)
+            },
         ).also { it.start() }
     }
 }

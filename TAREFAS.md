@@ -19,3 +19,10 @@
 - [x] Porta HTTPS 8443 → 8444 (o receptor de Cast do Android TV já ocupa a 8443)
 - [x] Validar em runtime no emulador de Android TV (jogo renderiza, relay WebSocket entrega)
 - [ ] Checklist de validação manual (render + sensor real no iPhone)
+
+## Distribuição
+- [x] Assinatura de release (keystore fora do repositório, senhas em `~/.gradle/gradle.properties`)
+- [x] Autoatualização pelo GitHub Releases (`GithubUpdates` + `UpdateService` + rota `/update`)
+- [x] Banner de atualização no jogo (OK/Enter baixa e instala, com progresso)
+- [x] `publicar.sh` (bump de versão, build assinado, tag e release no GitHub)
+- [ ] Validar na TV: banner aparece, download e instalação concluem

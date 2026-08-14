@@ -26,6 +26,10 @@ class RouteResolverTest {
         assertEquals(Route.Config, RouteResolver.resolve("/config"))
     }
 
+    @Test fun update_tem_rota_propria() {
+        assertEquals(Route.Update, RouteResolver.resolve("/update"))
+    }
+
     @Test fun ws_tem_rota_propria() {
         assertEquals(Route.Ws, RouteResolver.resolve("/ws"))
     }
