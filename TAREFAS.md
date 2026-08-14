@@ -26,3 +26,7 @@
 - [x] Banner de atualização no jogo (OK/Enter baixa e instala, com progresso)
 - [x] `publicar.sh` (bump de versão, build assinado, tag e release no GitHub)
 - [ ] Validar na TV: banner aparece, download e instalação concluem
+
+## Reformulação do jogo (onda 2)
+- [x] Protocolo com acelerador (`throttle`) e período dia/noite (`setup`)
+- [x] Módulo de pontuação (`shared/scoring.js`: pontos, placar, ranking, recorde, formatação)
