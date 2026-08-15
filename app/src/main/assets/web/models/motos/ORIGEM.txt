@@ -1,0 +1,5 @@
+Modelos de moto fornecidos pelo usuario (Guilherme).
+- sk-bike.glb  : SK_RSG_Bike (origem FBX), convertido com assimp. Rodas em meshes separadas.
+                 Texturas bike01_{BC,N,R,M}.jpg reduzidas de 4K para 1024 (JPEG 80).
+- kawasaki.glb : Motorcycle Kawasaki Ninja (origem OBJ), convertido e otimizado (gltf-transform).
+Licenca: de responsabilidade do usuario (nao sao CC0 como os modelos da Kenney em ../).

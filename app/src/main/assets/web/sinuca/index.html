@@ -1,0 +1,173 @@
+<!doctype html>
+<html lang="pt-br">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Sinuca — Joguinhos</title>
+  <style>
+    :root{
+      --acento:#6E29F6;
+      --acento-claro:#a97cff;
+      --ciano:#22e0ff;
+      --ouro:#ffcf3d;
+      --p1:#22e0ff;
+      --p2:#ff8a3d;
+      --texto:#f3f4fb;
+      --painel:rgba(8,8,16,.62);
+      --borda:rgba(255,255,255,.10);
+      --condensada:"Roboto Condensed","Arial Narrow",Roboto,"Helvetica Neue",system-ui,sans-serif;
+    }
+    *{box-sizing:border-box}
+    html,body{margin:0;height:100%;overflow:hidden;background:#05060c;color:var(--texto);
+      font-family:var(--condensada);-webkit-font-smoothing:antialiased;user-select:none}
+    canvas{display:block;position:fixed;inset:0;z-index:0}
+    .oculto{display:none !important}
+
+    #update{position:fixed;top:0;left:0;right:0;z-index:20;padding:12px 18px;text-align:center;
+      font-size:clamp(14px,2vh,22px);font-weight:700;letter-spacing:.04em;
+      background:linear-gradient(90deg,#6E29F6,#8b5cf6);box-shadow:0 6px 24px rgba(0,0,0,.55)}
+
+    /* HUD */
+    #hud{position:fixed;inset:0;pointer-events:none;z-index:4;
+      padding:clamp(12px,2.2vh,26px) clamp(16px,3vw,44px)}
+    .canto{position:absolute;top:clamp(12px,2.2vh,26px)}
+    .esq{left:clamp(16px,3vw,44px)}
+    .dir{right:clamp(16px,3vw,44px);text-align:right}
+    .rotulo{font-size:clamp(10px,1.3vh,15px);letter-spacing:.3em;text-transform:uppercase;
+      color:rgba(243,244,251,.55);font-weight:700}
+    #vez{font-size:clamp(28px,5.4vh,64px);font-weight:900;line-height:.95;letter-spacing:-.01em;
+      color:#fff;text-shadow:0 0 24px rgba(110,41,246,.7)}
+    body[data-jogador="1"] #vez{text-shadow:0 0 24px rgba(34,224,255,.75)}
+    body[data-jogador="2"] #vez{text-shadow:0 0 24px rgba(255,138,61,.75)}
+    #grupo{margin-top:4px;font-size:clamp(14px,2vh,24px);font-weight:700;letter-spacing:.06em;
+      color:var(--acento-claro)}
+    #bih{margin-top:8px;display:inline-block;font-size:clamp(11px,1.5vh,17px);font-weight:800;
+      letter-spacing:.1em;padding:4px 12px;border-radius:999px;color:#111;
+      background:var(--ouro);box-shadow:0 0 20px rgba(255,207,61,.5)}
+    .painel{background:var(--painel);border:1px solid var(--borda);border-radius:14px;
+      padding:8px 16px;backdrop-filter:blur(6px);display:inline-block}
+    #recado{min-height:1.2em;font-size:clamp(13px,1.8vh,20px);color:rgba(243,244,251,.82)}
+    .legenda{margin-top:8px;font-size:clamp(11px,1.5vh,16px);color:rgba(243,244,251,.6)}
+    .tecla{display:inline-block;min-width:1.8em;padding:2px 7px;margin:0 3px;border-radius:6px;
+      background:rgba(255,255,255,.10);border:1px solid var(--borda);font-weight:700;color:#fff}
+
+    /* placar de bolas (parte inferior) */
+    #racks{position:fixed;left:0;right:0;bottom:0;z-index:5;pointer-events:none;
+      display:flex;justify-content:space-between;align-items:flex-end;gap:clamp(12px,3vw,40px);
+      padding:0 clamp(16px,3vw,44px) clamp(10px,2vh,22px)}
+    .rack{background:var(--painel);border:1px solid var(--borda);border-radius:16px;
+      padding:clamp(6px,1.2vh,12px) clamp(10px,1.6vw,18px);backdrop-filter:blur(6px);
+      display:flex;flex-direction:column;gap:6px;min-width:min(38vw,420px)}
+    .rack .cab{display:flex;align-items:center;gap:8px;font-size:clamp(11px,1.5vh,16px);
+      letter-spacing:.16em;text-transform:uppercase;font-weight:700;color:rgba(243,244,251,.62)}
+    .rack .cab .quem{color:#fff}
+    .rack.p1 .cab .quem{color:var(--p1)}
+    .rack.p2 .cab .quem{color:var(--p2)}
+    .rack.vez{border-color:var(--acento);box-shadow:0 0 0 2px rgba(110,41,246,.35)}
+    .rack .bolas{display:flex;gap:5px;flex-wrap:wrap;min-height:clamp(18px,2.6vh,30px)}
+    .rack .vazio{font-size:clamp(11px,1.5vh,16px);color:rgba(243,244,251,.38)}
+    .mini{width:clamp(18px,2.6vh,30px);height:clamp(18px,2.6vh,30px);border-radius:50%;
+      display:flex;align-items:center;justify-content:center;
+      font-size:clamp(9px,1.3vh,14px);font-weight:800;color:#15151c;
+      background:#f4f1e8;box-shadow:inset 0 -3px 6px rgba(0,0,0,.28)}
+    .mini.solida{color:#fff}
+    .mini.listrada{background:
+      linear-gradient(#f4f1e8 0 30%, var(--c) 30% 70%, #f4f1e8 70% 100%)}
+
+    /* telas */
+    .tela{position:fixed;inset:0;z-index:6;display:flex;flex-direction:column;
+      align-items:center;justify-content:center;gap:clamp(8px,1.6vh,20px);text-align:center;
+      padding:clamp(12px,2.4vh,28px) clamp(16px,3vw,44px);overflow:hidden;
+      background:radial-gradient(120% 100% at 50% 0%,rgba(110,41,246,.26),rgba(3,4,10,.92) 62%)}
+    /* Nada pode ser espremido a ponto de o texto transbordar sobre o QR. */
+    .tela > *{flex:0 0 auto;max-width:100%}
+
+    /* A espera cobre a mesa: com o fundo translúcido as bolas apareciam atrás
+       do texto e atrapalhavam a leitura à distância. */
+    #telaEspera,#telaQr{
+      background:radial-gradient(120% 100% at 50% 0%,rgba(110,41,246,.30),rgba(5,6,12,.96) 58%),#05060c}
+
+    /* espera: QR ao lado do texto — cabe folgado na altura da TV */
+    .lado{display:flex;align-items:center;gap:clamp(16px,3vw,44px);flex-wrap:wrap;justify-content:center}
+    /* Sem isto o cartão do QR encolhe quando a linha não cabe e o canvas de
+       200px transborda por cima do texto (foi o que aconteceu na TV). */
+    .lado > *{flex:0 0 auto}
+    .lado .texto{text-align:left;max-width:min(52vw,560px);display:flex;flex-direction:column;
+      gap:clamp(6px,1.2vh,14px)}
+    #esperaStatus{font-size:clamp(15px,2.2vh,26px);font-weight:700;color:var(--ouro)}
+    .marca{font-size:clamp(30px,7vh,86px);font-weight:900;letter-spacing:.14em;line-height:1;text-transform:uppercase}
+    .marca span{color:var(--acento-claro);text-shadow:0 0 34px rgba(110,41,246,.9)}
+    .sub{font-size:clamp(14px,2vh,24px);color:rgba(243,244,251,.72);letter-spacing:.08em;max-width:72vw}
+    .cartao{background:var(--painel);border:1px solid var(--borda);border-radius:20px;
+      padding:clamp(14px,2.4vh,26px);backdrop-filter:blur(8px);box-shadow:0 24px 60px rgba(0,0,0,.55)}
+    .qr{background:#fff;padding:12px;border-radius:14px;line-height:0;
+      width:224px;height:224px}
+    .qr canvas,.qr img,.qr table{width:200px !important;height:200px !important;display:block}
+    #fimTitulo{font-size:clamp(40px,10vh,120px);font-weight:900;letter-spacing:.04em;color:var(--ouro);
+      text-shadow:0 0 40px rgba(255,207,61,.6);line-height:.95}
+  </style>
+</head>
+<body data-jogador="1">
+  <canvas id="mesa"></canvas>
+  <div id="update" class="oculto"></div>
+
+  <div id="hud" class="oculto">
+    <div class="canto esq">
+      <div class="rotulo">Vez de</div>
+      <div id="vez">Jogador 1</div>
+      <div id="grupo">Mesa aberta</div>
+      <div id="bih" class="oculto">Bola na mão</div>
+    </div>
+    <div class="canto dir">
+      <div class="painel"><span id="recado">Quebra!</span></div>
+      <div class="legenda">
+        <span class="tecla">◄</span><span class="tecla">►</span> mira ·
+        <span class="tecla">▲</span><span class="tecla">▼</span> força ·
+        <span class="tecla">OK</span> taca
+      </div>
+    </div>
+  </div>
+
+  <!-- bolas já encaçapadas de cada lado -->
+  <div id="racks" class="oculto">
+    <div class="rack p1" id="rackP1">
+      <div class="cab"><span class="quem">Jogador 1</span><span id="grupoP1"></span></div>
+      <div class="bolas" id="bolasP1"><span class="vazio">nenhuma bola ainda</span></div>
+    </div>
+    <div class="rack p2" id="rackP2">
+      <div class="cab"><span class="quem" id="nomeP2">Jogador 2</span><span id="grupoP2"></span></div>
+      <div class="bolas" id="bolasP2"><span class="vazio">nenhuma bola ainda</span></div>
+    </div>
+  </div>
+
+  <!-- aguardando os controles -->
+  <div id="telaEspera" class="tela">
+    <div class="marca"><span>Sinuca</span></div>
+    <div class="lado">
+      <!-- o QR só aparece quando falta alguém entrar -->
+      <div class="cartao" id="cartaoQr"><div id="qrEspera" class="qr"></div></div>
+      <div class="texto">
+        <div id="esperaStatus">Escaneie o QR para entrar como Jogador 1</div>
+        <div class="sub" id="esperaDica">8-ball · o jogo você escolhe pelo celular</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- fim de jogo -->
+  <div id="telaFim" class="tela oculto">
+    <div id="fimTitulo">Jogador 1 venceu!</div>
+    <div id="fimSub" class="sub"></div>
+    <div class="sub">Toque em <b>Reiniciar</b> no celular ou pressione <span class="tecla">OK</span></div>
+  </div>
+
+  <!-- QR sob demanda -->
+  <div id="telaQr" class="tela oculto">
+    <div class="marca">Conectar <span>controle</span></div>
+    <div class="cartao"><div id="qrPedido" class="qr"></div></div>
+    <div class="sub">Aponte a câmera do celular para o código</div>
+  </div>
+
+  <script src="../vendor/qrcode.min.js"></script>
+  <script type="module" src="./sinuca.js"></script>
+</body>
+</html>

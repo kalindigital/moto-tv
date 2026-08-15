@@ -1,0 +1,385 @@
+<!doctype html>
+<html lang="pt-br">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+  <meta name="theme-color" content="#0b0b12">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>Controle — Joguinhos</title>
+  <style>
+    :root{
+      --acento:#6E29F6;
+      --acento-claro:#9a6bff;
+      --fundo:#0b0b12;
+      --superficie:#171724;
+      --superficie-alta:#22223a;
+      --borda:#2e2e46;
+      --texto:#fff;
+      --texto-fraco:#a6a6c0;
+      --ok:#3ccb5a;
+      --erro:#e3474f;
+    }
+    *{box-sizing:border-box}
+    html,body{
+      margin:0;height:100%;width:100%;
+      background:var(--fundo);color:var(--texto);
+      font-family:system-ui,-apple-system,"Segoe UI",sans-serif;
+      overflow:hidden;overscroll-behavior:none;
+      touch-action:manipulation;
+      -webkit-user-select:none;user-select:none;
+      -webkit-touch-callout:none;
+      -webkit-tap-highlight-color:transparent;
+    }
+    [hidden]{display:none !important}
+    button{font-family:inherit;color:inherit;border:0;background:none;cursor:pointer}
+
+    /* ---------- telas ---------- */
+    .tela{
+      position:absolute;inset:0;
+      display:flex;
+      padding:calc(12px + env(safe-area-inset-top)) calc(12px + env(safe-area-inset-right))
+              calc(12px + env(safe-area-inset-bottom)) calc(12px + env(safe-area-inset-left));
+      gap:12px;
+    }
+
+    /* ---------- indicador de conexão ---------- */
+    #status{
+      position:fixed;z-index:10;
+      top:calc(6px + env(safe-area-inset-top));right:calc(10px + env(safe-area-inset-right));
+      font-size:12px;color:var(--texto-fraco);display:flex;align-items:center;gap:6px;
+      /* fica por cima do acelerador em paisagem: pílula para continuar legível */
+      background:rgba(11,11,18,.72);border-radius:999px;padding:4px 10px;pointer-events:none;
+    }
+    .dot{width:9px;height:9px;border-radius:50%;background:var(--erro);box-shadow:0 0 8px var(--erro)}
+    .dot.on{background:var(--ok);box-shadow:0 0 8px var(--ok)}
+
+    /* ---------- tela 1: preparação ---------- */
+    #tela-preparacao{flex-direction:column;align-items:center;justify-content:center;overflow-y:auto}
+    #tela-preparacao h1{
+      margin:0;font-size:clamp(24px,7vw,40px);letter-spacing:.08em;text-transform:uppercase;
+      background:linear-gradient(90deg,var(--acento-claro),#fff);
+      -webkit-background-clip:text;background-clip:text;color:transparent;
+    }
+    .grupo{width:100%;max-width:640px}
+    .rotulo{margin:0 0 6px;font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--texto-fraco);font-weight:600}
+    .opcoes{display:flex;gap:10px}
+    .opcao{
+      flex:1;min-height:64px;padding:10px 8px;border-radius:14px;
+      background:var(--superficie);border:2px solid var(--borda);
+      display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;
+      transition:border-color .12s,background .12s,transform .08s;
+    }
+    .opcao .nome{font-size:16px;font-weight:700}
+    .opcao .desc{font-size:11px;color:var(--texto-fraco)}
+    .opcao:active{transform:scale(.97)}
+    .opcao[aria-pressed="true"]{
+      border-color:var(--acento);background:var(--superficie-alta);
+      box-shadow:0 0 0 3px rgba(110,41,246,.22);
+    }
+    .opcao[aria-pressed="true"] .desc{color:var(--acento-claro)}
+    #comecar{
+      width:100%;max-width:640px;min-height:64px;border-radius:16px;
+      background:var(--acento);font-size:22px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;
+      box-shadow:0 6px 20px rgba(110,41,246,.4);
+    }
+    #comecar:active{filter:brightness(.85);transform:translateY(1px)}
+    .dica{margin:0;font-size:12px;color:var(--texto-fraco);text-align:center}
+    #aviso{
+      margin:0;max-width:640px;font-size:13px;line-height:1.35;text-align:center;
+      color:#ffd27d;background:rgba(255,210,125,.1);border:1px solid rgba(255,210,125,.35);
+      border-radius:10px;padding:8px 10px;
+    }
+
+    /* ---------- tela 2: controle ---------- */
+    #tela-controle{flex-direction:column}
+    .lateral{display:flex;flex-direction:column;gap:10px;flex:0 0 auto}
+    #bar{
+      width:100%;height:14px;background:var(--superficie);border:1px solid var(--borda);
+      border-radius:8px;overflow:hidden;position:relative;
+    }
+    #bar::after{content:"";position:absolute;left:50%;top:0;bottom:0;width:1px;background:var(--borda)}
+    #fill{height:100%;width:50%;background:linear-gradient(90deg,var(--acento),var(--acento-claro));transition:width .05s linear}
+    .acoes{display:flex;gap:8px;flex-wrap:wrap}
+    .acoes button{
+      flex:1 1 0;min-width:88px;min-height:52px;padding:8px 6px;border-radius:12px;
+      background:var(--superficie);border:1px solid var(--borda);
+      font-size:14px;font-weight:600;
+    }
+    .acoes button:active{background:var(--superficie-alta)}
+    #pausar[data-pausado="true"]{border-color:var(--acento);color:var(--acento-claro)}
+    #acelerar{
+      flex:1 1 auto;min-height:38vh;width:100%;
+      border-radius:22px;border:2px solid var(--acento);
+      background:radial-gradient(120% 120% at 50% 0%,rgba(110,41,246,.35),rgba(110,41,246,.12));
+      font-size:clamp(28px,8vw,64px);font-weight:900;letter-spacing:.1em;
+      display:flex;align-items:center;justify-content:center;
+      touch-action:none;
+      transition:background .08s,transform .08s,box-shadow .08s;
+    }
+    #acelerar.ativo{
+      background:var(--acento);
+      box-shadow:0 0 40px rgba(110,41,246,.65),inset 0 0 30px rgba(255,255,255,.18);
+      transform:scale(.99);
+    }
+
+    /* ---------- retrato ---------- */
+    @media (orientation:portrait){
+      /* deixa a barra de direção livre do indicador de conexão */
+      #tela-controle{padding-top:calc(34px + env(safe-area-inset-top))}
+    }
+
+    /* ---------- seletor de jogo ---------- */
+    #tela-jogo{flex-direction:column;align-items:center;justify-content:center;gap:16px}
+    #tela-jogo h1{
+      margin:0;font-size:clamp(24px,7vw,40px);letter-spacing:.08em;text-transform:uppercase;
+      background:linear-gradient(90deg,var(--acento-claro),#fff);
+      -webkit-background-clip:text;background-clip:text;color:transparent;
+    }
+    .jogos{display:flex;flex-direction:column;gap:14px;width:100%;max-width:520px}
+    .jogo{min-height:96px;border-radius:18px;background:var(--superficie);border:2px solid var(--borda);
+      display:flex;align-items:center;gap:16px;padding:16px 20px;transition:border-color .12s,transform .08s}
+    .jogo:active{transform:scale(.98);border-color:var(--acento)}
+    .jogo .ic{font-size:44px;line-height:1}
+    .jogo .tx{text-align:left}
+    .jogo .tx .n{display:block;font-size:22px;font-weight:800}
+    .jogo .tx .d{display:block;font-size:13px;color:var(--texto-fraco)}
+
+    /* ---------- sinuca: modo e aparência ---------- */
+    #tela-sinuca-modo{flex-direction:column;align-items:center;justify-content:center;gap:18px;overflow-y:auto}
+    #tela-sinuca-modo h1,
+    #tela-sinuca-prep h1{
+      margin:0;font-size:clamp(24px,7vw,40px);letter-spacing:.08em;text-transform:uppercase;
+      background:linear-gradient(90deg,var(--acento-claro),#fff);
+      -webkit-background-clip:text;background-clip:text;color:transparent;
+    }
+    #tela-sinuca-prep{flex-direction:column;align-items:center;justify-content:center;overflow-y:auto}
+    #sinuca-comecar{
+      width:100%;max-width:640px;min-height:64px;border-radius:16px;
+      background:var(--acento);font-size:22px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;
+      box-shadow:0 6px 20px rgba(110,41,246,.4);
+    }
+    #sinuca-comecar:active{filter:brightness(.85);transform:translateY(1px)}
+
+    /* ---------- controle da sinuca ---------- */
+    #tela-sinuca{flex-direction:column;gap:10px}
+    #sinuca-cab{display:flex;flex-direction:column;gap:2px;flex:0 0 auto;text-align:center}
+    #sinuca-vez{font-size:22px;font-weight:900;letter-spacing:.04em}
+    #sinuca-sub{font-size:13px;color:var(--texto-fraco)}
+    #sinuca-bih{display:none;margin:2px auto 0;font-size:12px;font-weight:800;color:#111;
+      background:#ffd257;padding:3px 12px;border-radius:999px}
+    #sinuca-bih.on{display:inline-block}
+    #linhaPad{flex:1 1 auto;min-height:0;display:flex;gap:10px;align-items:stretch}
+    #padSinuca{flex:1 1 auto;height:100%;min-width:0;border-radius:20px;border:2px solid var(--acento);
+      background:radial-gradient(130% 130% at 50% 40%,rgba(110,41,246,.20),rgba(110,41,246,.06));
+      touch-action:none;display:block}
+    /* seletor de efeito: toque na bola branca onde o taco deve bater */
+    #efeitoCaixa{flex:0 0 auto;display:flex;flex-direction:column;align-items:center;gap:6px;
+      justify-content:center}
+    #efeitoCaixa .et{font-size:11px;letter-spacing:.14em;text-transform:uppercase;
+      color:var(--texto-fraco);font-weight:700}
+    #padEfeito{width:104px;height:104px;touch-action:none;border-radius:50%;
+      box-shadow:0 6px 18px rgba(0,0,0,.5)}
+    #efeitoCentro{font-size:12px;font-weight:600;color:var(--texto-fraco);
+      border:1px solid var(--borda);border-radius:10px;padding:6px 10px;background:var(--superficie)}
+    #efeitoCentro:active{background:var(--superficie-alta)}
+    @media (max-height:520px){ #padEfeito{width:84px;height:84px} }
+    /* medidor de força: enche conforme o puxão do taco */
+    #forcaBarra{position:relative;flex:0 0 auto;height:30px;border-radius:15px;overflow:hidden;
+      background:var(--superficie);border:1px solid var(--borda)}
+    #forcaPreenche{position:absolute;inset:0 auto 0 0;width:0%;border-radius:15px;
+      background:linear-gradient(90deg,var(--acento),#ff7a3d 78%,var(--erro));
+      transition:width .04s linear}
+    #forcaTexto{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+      font-size:13px;font-weight:800;letter-spacing:.1em;text-shadow:0 1px 3px rgba(0,0,0,.7)}
+    #forcaBarra.maxima #forcaPreenche{animation:pulsaForca .28s ease-in-out infinite alternate}
+    @keyframes pulsaForca{from{filter:brightness(1)}to{filter:brightness(1.45)}}
+
+    .sinuca-acoes{display:flex;gap:8px;flex:0 0 auto}
+    .sinuca-acoes button{flex:1;min-height:48px;border-radius:12px;background:var(--superficie);
+      border:1px solid var(--borda);font-size:14px;font-weight:600}
+    .sinuca-acoes button:active{background:var(--superficie-alta)}
+    #sinuca-posicionar.on{border-color:var(--acento);color:var(--acento-claro)}
+
+    /* ---------- paisagem ---------- */
+    @media (orientation:landscape){
+      #tela-preparacao,#tela-sinuca-prep{gap:10px;justify-content:center}
+      #tela-preparacao h1,#tela-sinuca-prep h1{font-size:clamp(20px,5vh,32px)}
+      .opcao{min-height:56px}
+      #comecar,#sinuca-comecar{min-height:56px;font-size:20px}
+      #tela-controle{flex-direction:row;align-items:stretch}
+      .lateral{flex:0 0 34%;max-width:300px;justify-content:space-between}
+      .acoes{flex-direction:column;flex:1;justify-content:flex-end}
+      .acoes button{flex:0 0 auto}
+      #acelerar{min-height:0;height:100%}
+      .jogos{flex-direction:row}
+      #tela-sinuca{flex-direction:column}
+    }
+  </style>
+</head>
+<body>
+  <div id="status" role="status" aria-live="polite">
+    <span class="dot" id="dot"></span><span id="conn">desconectado</span>
+  </div>
+
+  <!-- Tela 0 — escolha do jogo -->
+  <main id="tela-jogo" class="tela">
+    <h1>Escolha o jogo</h1>
+    <div class="jogos" id="jogos">
+      <button type="button" class="jogo" data-game="moto">
+        <span class="ic">🏍️</span>
+        <span class="tx"><span class="n">Moto</span><span class="d">Corrida 3D · incline o celular para virar</span></span>
+      </button>
+      <button type="button" class="jogo" data-game="sinuca">
+        <span class="ic">🎱</span>
+        <span class="tx"><span class="n">Sinuca</span><span class="d">8-ball · 2 jogadores · arraste e solte para tacar</span></span>
+      </button>
+    </div>
+    <p class="dica" id="jogo-status">Procurando um jogo aberto na TV…</p>
+  </main>
+
+  <!-- MOTO — Tela 1: antes da corrida -->
+  <main id="tela-preparacao" class="tela" hidden>
+    <h1>Moto TV</h1>
+
+    <div class="grupo">
+      <h2 class="rotulo">Escolha a moto</h2>
+      <div class="opcoes" id="motos" role="group" aria-label="Escolha a moto">
+        <button type="button" class="opcao" data-moto="sk" aria-pressed="true">
+          <span class="nome">Esportiva</span><span class="desc">ágil</span>
+        </button>
+        <button type="button" class="opcao" data-moto="kawasaki" aria-pressed="false">
+          <span class="nome">Ninja</span><span class="desc">veloz</span>
+        </button>
+        <button type="button" class="opcao" data-moto="classica" aria-pressed="false">
+          <span class="nome">Clássica</span><span class="desc">equilibrada</span>
+        </button>
+      </div>
+    </div>
+
+    <div class="grupo">
+      <h2 class="rotulo">Período</h2>
+      <div class="opcoes" id="periodos" role="group" aria-label="Escolha o período">
+        <button type="button" class="opcao" data-periodo="dia" aria-pressed="true">
+          <span class="nome">Dia</span><span class="desc">céu aberto</span>
+        </button>
+        <button type="button" class="opcao" data-periodo="noite" aria-pressed="false">
+          <span class="nome">Noite</span><span class="desc">faróis ligados</span>
+        </button>
+      </div>
+    </div>
+
+    <p id="aviso" hidden></p>
+    <button type="button" id="comecar">Começar</button>
+    <p class="dica">Segure o celular deitado e incline para virar.</p>
+  </main>
+
+  <!-- Tela 2 — durante a corrida -->
+  <main id="tela-controle" class="tela" hidden>
+    <div class="lateral">
+      <div id="bar" role="img" aria-label="Direção"><div id="fill"></div></div>
+      <div class="acoes">
+        <button type="button" id="pausar" data-pausado="false">Pausar</button>
+        <button type="button" id="calibrar">Calibrar</button>
+        <button type="button" id="reiniciar">Reiniciar</button>
+        <button type="button" id="qr">Mostrar QR</button>
+        <button type="button" id="inverter">Inverter direção</button>
+        <button type="button" id="sair">⇤ Sair</button>
+      </div>
+    </div>
+    <button type="button" id="acelerar">ACELERAR</button>
+  </main>
+
+  <!-- SINUCA — Tela 0: modo de jogo -->
+  <main id="tela-sinuca-modo" class="tela" hidden>
+    <h1>Sinuca</h1>
+    <div class="jogos" id="modos">
+      <button type="button" class="jogo" data-modo="solo">
+        <span class="ic">🤖</span>
+        <span class="tx"><span class="n">Sozinho</span><span class="d">Você contra a máquina</span></span>
+      </button>
+      <button type="button" class="jogo" data-modo="multi">
+        <span class="ic">👥</span>
+        <span class="tx"><span class="n">Multiplayer</span><span class="d">Outro jogador escaneia o QR da TV</span></span>
+      </button>
+    </div>
+
+    <div class="grupo" id="grupo-dificuldade" hidden>
+      <h2 class="rotulo">Dificuldade da máquina</h2>
+      <div class="opcoes" id="dificuldades" role="group" aria-label="Dificuldade">
+        <button type="button" class="opcao" data-dif="facil" aria-pressed="false">
+          <span class="nome">Fácil</span><span class="desc">erra bastante</span>
+        </button>
+        <button type="button" class="opcao" data-dif="medio" aria-pressed="true">
+          <span class="nome">Médio</span><span class="desc">equilibrada</span>
+        </button>
+        <button type="button" class="opcao" data-dif="dificil" aria-pressed="false">
+          <span class="nome">Difícil</span><span class="desc">acerta muito</span>
+        </button>
+      </div>
+    </div>
+  </main>
+
+  <!-- SINUCA — Tela 1: aparência (taco e mesa) -->
+  <main id="tela-sinuca-prep" class="tela" hidden>
+    <h1>Sinuca</h1>
+    <div class="grupo">
+      <h2 class="rotulo">Taco</h2>
+      <div class="opcoes" id="tacos" role="group" aria-label="Escolha o taco">
+        <button type="button" class="opcao" data-taco="classico" aria-pressed="true">
+          <span class="nome">Clássico</span><span class="desc">madeira</span>
+        </button>
+        <button type="button" class="opcao" data-taco="grafite" aria-pressed="false">
+          <span class="nome">Grafite</span><span class="desc">grafite</span>
+        </button>
+        <button type="button" class="opcao" data-taco="vermelho" aria-pressed="false">
+          <span class="nome">Vermelho</span><span class="desc">esportivo</span>
+        </button>
+      </div>
+    </div>
+    <div class="grupo">
+      <h2 class="rotulo">Mesa</h2>
+      <div class="opcoes" id="mesas" role="group" aria-label="Escolha a mesa">
+        <button type="button" class="opcao" data-mesa="verde" aria-pressed="true">
+          <span class="nome">Verde</span><span class="desc">clássica</span>
+        </button>
+        <button type="button" class="opcao" data-mesa="azul" aria-pressed="false">
+          <span class="nome">Azul</span><span class="desc">torneio</span>
+        </button>
+        <button type="button" class="opcao" data-mesa="vinho" aria-pressed="false">
+          <span class="nome">Vinho</span><span class="desc">clube</span>
+        </button>
+      </div>
+    </div>
+    <button type="button" id="sinuca-comecar">Começar</button>
+    <p class="dica">Dois jogadores no mesmo sofá — passem o celular a cada tacada.</p>
+  </main>
+
+  <!-- SINUCA — Tela 2: controle (estilingue) -->
+  <main id="tela-sinuca" class="tela" hidden>
+    <div id="sinuca-cab">
+      <div id="sinuca-vez">Jogador 1</div>
+      <div id="sinuca-sub">Mesa aberta · arraste para trás e solte para tacar</div>
+      <div id="sinuca-bih">Bola na mão</div>
+    </div>
+    <div id="linhaPad">
+      <canvas id="padSinuca"></canvas>
+      <div id="efeitoCaixa">
+        <span class="et">Efeito</span>
+        <canvas id="padEfeito" width="120" height="120"></canvas>
+        <button type="button" id="efeitoCentro">Centro</button>
+      </div>
+    </div>
+    <div id="forcaBarra"><i id="forcaPreenche"></i><span id="forcaTexto">Força 0%</span></div>
+    <div class="sinuca-acoes">
+      <button type="button" id="sinuca-posicionar" hidden>Posicionar branca</button>
+      <button type="button" id="sinuca-reiniciar">Reiniciar</button>
+      <button type="button" id="sinuca-qr">QR</button>
+      <button type="button" id="sinuca-sair">⇤ Sair</button>
+    </div>
+  </main>
+
+  <script type="module" src="./controle.js"></script>
+</body>
+</html>

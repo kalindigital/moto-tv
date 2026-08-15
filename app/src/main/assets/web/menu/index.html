@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="pt-br">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Joguinhos</title>
+  <style>
+    :root{
+      --acento:#6E29F6;
+      --acento-claro:#a97cff;
+      --ciano:#22e0ff;
+      --verde:#25d366;
+      --texto:#f3f4fb;
+      --painel:rgba(8,8,16,.62);
+      --borda:rgba(255,255,255,.10);
+      --condensada:"Roboto Condensed","Arial Narrow",Roboto,"Helvetica Neue",system-ui,sans-serif;
+    }
+    *{box-sizing:border-box}
+    html,body{margin:0;height:100%;overflow:hidden;background:#05060c;color:var(--texto);
+      font-family:var(--condensada);-webkit-font-smoothing:antialiased;user-select:none}
+    .oculto{display:none !important}
+
+    #fundo{position:fixed;inset:0;z-index:0;
+      background:radial-gradient(130% 100% at 50% -10%,rgba(110,41,246,.28),#05060c 60%)}
+
+    #update{position:fixed;top:0;left:0;right:0;z-index:20;padding:12px 18px;text-align:center;
+      font-size:clamp(14px,2vh,22px);font-weight:700;letter-spacing:.04em;
+      background:linear-gradient(90deg,#6E29F6,#8b5cf6);box-shadow:0 6px 24px rgba(0,0,0,.55)}
+
+    main{position:fixed;inset:0;z-index:2;display:flex;flex-direction:column;
+      align-items:center;justify-content:center;gap:clamp(14px,3vh,34px);text-align:center;
+      padding:clamp(20px,4vh,48px)}
+
+    .marca{font-size:clamp(30px,6.6vh,80px);font-weight:900;letter-spacing:.16em;line-height:1;
+      text-transform:uppercase}
+    .marca span{color:var(--acento-claro);text-shadow:0 0 34px rgba(110,41,246,.9)}
+    .sub{font-size:clamp(14px,2vh,24px);color:rgba(243,244,251,.72);letter-spacing:.08em}
+
+    .cards{display:flex;gap:clamp(16px,3vw,40px);flex-wrap:wrap;justify-content:center}
+    .card{width:clamp(220px,26vw,340px);min-height:clamp(200px,34vh,300px);
+      background:var(--painel);border:2px solid var(--borda);border-radius:24px;
+      padding:clamp(18px,3vh,34px);display:flex;flex-direction:column;align-items:center;
+      justify-content:center;gap:12px;cursor:pointer;
+      transition:border-color .15s,box-shadow .15s,transform .12s,background .15s}
+    .card .icone{font-size:clamp(56px,12vh,120px);line-height:1;filter:drop-shadow(0 8px 22px rgba(0,0,0,.5))}
+    .card .nome{font-size:clamp(22px,3.4vh,40px);font-weight:900;letter-spacing:.1em;text-transform:uppercase}
+    .card .desc{font-size:clamp(12px,1.7vh,18px);color:rgba(243,244,251,.6);letter-spacing:.06em}
+    .card{cursor:default}
+
+    .rodape{display:flex;align-items:center;gap:clamp(14px,3vw,34px);flex-wrap:wrap;justify-content:center}
+    .qr{background:#fff;padding:10px;border-radius:12px;line-height:0;
+      width:210px;height:210px}
+    .qr canvas,.qr img,.qr table{width:190px !important;height:190px !important;display:block}
+    .rodape .texto{max-width:min(48vw,420px);text-align:left}
+    .rodape .texto b{color:#fff}
+    .tecla{display:inline-block;min-width:2em;padding:2px 8px;margin:0 4px;border-radius:7px;
+      background:rgba(255,255,255,.10);border:1px solid var(--borda);font-weight:700;color:#fff}
+  </style>
+</head>
+<body>
+  <div id="fundo"></div>
+  <div id="update" class="oculto"></div>
+
+  <main>
+    <div class="marca">Jogui<span>nhos</span></div>
+    <div class="sub">Escaneie o código com o celular para jogar</div>
+
+    <div class="cards" id="cards">
+      <div class="card" data-game="moto">
+        <div class="icone">🏍️</div>
+        <div class="nome">Moto</div>
+        <div class="desc">Corrida 3D · incline o celular</div>
+      </div>
+      <div class="card" data-game="sinuca">
+        <div class="icone">🎱</div>
+        <div class="nome">Sinuca</div>
+        <div class="desc">8-ball · sozinho ou em dois</div>
+      </div>
+    </div>
+
+    <div class="rodape">
+      <div class="qr" id="qr"></div>
+      <div class="texto sub">
+        Aponte a câmera do celular para o código: <b>o jogo você escolhe por lá</b>.
+        A TV só mostra o que tem disponível.
+      </div>
+    </div>
+  </main>
+
+  <script src="../vendor/qrcode.min.js"></script>
+  <script type="module" src="./menu.js"></script>
+</body>
+</html>

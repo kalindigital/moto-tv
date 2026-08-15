@@ -3,16 +3,69 @@
 ## Design
 - [x] Brainstorming e definição de escopo (protótipo enxuto)
 - [x] Documento de design (spec) em `docs/superpowers/specs/2026-08-14-moto-tv-controle-celular-design.md`
-- [ ] Revisão do spec pelo usuário
-- [ ] Plano de implementação (writing-plans)
+- [x] Revisão do spec pelo usuário
+- [x] Plano de implementação (writing-plans)
 
 ## Implementação (a detalhar no plano)
-- [ ] Projeto Android TV base (WebView fullscreen + LEANBACK)
-- [ ] Servidor Ktor embutido (HTTPS autoassinado + rotas + WebSocket relay)
-- [ ] Descoberta de IP na WiFi + modo dev (IP do Mac para o emulador)
-- [ ] Jogo Three.js (pista, moto, carros, câmera 3ª pessoa, colisão, estados)
-- [ ] QR code na tela do jogo
-- [ ] Página de controle no iPhone (permissão, gamma→steer, WebSocket, calibrar, reiniciar)
-- [ ] Testes JS (steer, colisão AABB, mensagens)
-- [ ] Testes Kotlin (relay Ktor, NetworkUtils)
-- [ ] Checklist de validação manual (render + sensor real)
+- [x] Projeto Android TV base (WebView fullscreen + LEANBACK)
+- [x] Servidor Ktor embutido (HTTPS autoassinado + rotas + WebSocket relay)
+- [x] Descoberta de IP na WiFi + modo dev (IP do Mac para o emulador)
+- [x] Jogo Three.js (pista, moto, carros, câmera 3ª pessoa, colisão, estados)
+- [x] QR code na tela do jogo
+- [x] Página de controle no iPhone (permissão, gamma→steer, WebSocket, calibrar, reiniciar)
+- [x] Testes JS (steer, colisão AABB, mensagens)
+- [x] Testes Kotlin (rotas, relay, NetworkUtils)
+- [x] Trocar o Ktor por NanoHTTPD + TLS (Netty quebra no Android; CIO não faz HTTPS)
+- [x] Porta HTTPS 8443 → 8444 (o receptor de Cast do Android TV já ocupa a 8443)
+- [x] Validar em runtime no emulador de Android TV (jogo renderiza, relay WebSocket entrega)
+- [ ] Checklist de validação manual (render + sensor real no iPhone)
+
+## Distribuição
+- [x] Assinatura de release (keystore fora do repositório, senhas em `~/.gradle/gradle.properties`)
+- [x] Autoatualização pelo GitHub Releases (`GithubUpdates` + `UpdateService` + rota `/update`)
+- [x] Banner de atualização no jogo (OK/Enter baixa e instala, com progresso)
+- [x] `publicar.sh` (bump de versão, build assinado, tag e release no GitHub)
+- [ ] Validar na TV: banner aparece, download e instalação concluem
+
+## Reformulação do jogo (onda 2)
+- [x] Protocolo com acelerador (`throttle`) e período dia/noite (`setup`)
+- [x] Módulo de pontuação (`shared/scoring.js`: pontos, placar, ranking, recorde, formatação)
+- [x] Modelos 3D dos veículos (`game/models.js`: carga dos GLB, normalização, pool de clones)
+- [x] Moto esportiva com piloto (procedural em Three.js, com farol e lanterna)
+- [x] Cenário dia/noite (`game/cenario.js`: pista, beira de estrada reciclada, postes acesos à noite)
+- [x] Som de motor sintetizado no WebAudio (`game/audio.js`)
+- [x] HUD do jogo (pontos, velocímetro, acelerador, período)
+- [x] Estados carregando/aguardando/jogando/pausado/crashed com pausa e reinício
+- [x] Tela de fim de jogo com pontuação, recorde e top 10 em localStorage
+- [x] QR sob demanda (ação `qr` / tecla Q), fora da tela de fim de jogo
+- [x] Validar em runtime no emulador (dia, noite, pausa, fim de jogo, QR)
+
+## Sinuca — app multijogo (onda 3)
+Plano em `docs/superpowers/specs/2026-08-15-sinuca-modo-multijogo-design.md`.
+- [x] Menu inicial na TV (`/menu`) escolhendo Moto ou Sinuca; `/` passa a redirecionar ao menu (RouteResolver + teste)
+- [x] Física 2D pura e testada (`shared/billiards.js`: colisão elástica, tabela, atrito, caçapa, repouso)
+- [x] Regras 8-ball puras e testadas (`shared/pool-rules.js`: turnos, grupos, faltas, bola na mão, vitória)
+- [x] Protocolo da sinuca (`shared/cue-protocol.js`: pick/aim/shoot/place/turn/sinucaSetup/join/assign) com testes
+- [x] Jogo Canvas 2D top-view (`sinuca/`: mesa, bolas numeradas, taco, HUD, telas, som procedural)
+- [x] Controle "estilingue" no celular (arrasta e solta) + seletor de jogo + botão Sair
+- [x] Aparência escolhível no celular (taco e mesa: verde/azul/vinho)
+- [x] Animação da bola caindo na caçapa (fade + deslize até o buraco)
+- [x] Modo 2 celulares: cada jogador escaneia e vira Jogador 1/2; trava por vez (`join`/`assign`)
+- [x] Física calibrada (rola e desacelera de forma fluida)
+- [x] Testes Vitest (billiards 15, pool-rules 17, cue-protocol 28) + JUnit segue verde (RouteResolver 7)
+- [x] Build `assembleDebug` e instalação na TV real via ADB (`installDebug`/`adb install`)
+- [x] Validado na TV: menu, render da mesa, quebra e detecção de falta
+- [x] Validar na TV: 2 celulares (atribuição 1/2, trava por vez), animação da caçapa, tela de aparência sem corte
+
+## Joguinhos — app multijogo (onda 4)
+- [x] App renomeado para **Joguinhos** (label do Android e títulos das páginas)
+- [x] TV virou vitrine: mostra os jogos e o QR; a escolha é toda no celular
+- [x] Entrada direta: escaneou o QR e já entra no jogo aberto como Jogador 1 ou 2
+- [x] Sinuca: modo **sozinho contra a máquina** ou **multiplayer** (QR para o Jogador 2)
+- [x] IA (`shared/pool-ai.js`) com níveis fácil/médio/difícil e "vacilo" — nunca infalível
+- [x] Efeito na branca: o celular mostra a bola e você toca onde o taco bate (curva, seguir, puxar)
+- [x] Bolas com rolamento 3D; ao parar, assentam com o número para cima
+- [x] Placar inferior com as bolas encaçapadas de cada lado
+- [x] Medidor de força no celular, vibração crescente ao puxar e vibração a cada pancada
+- [x] Testes: 157 verdes (billiards 22, pool-ai 13, cue-protocol 38 + demais), estáveis em execuções repetidas
+- [ ] Validar na TV: partida solo nos três níveis, efeito (curva/puxa), vibração no celular

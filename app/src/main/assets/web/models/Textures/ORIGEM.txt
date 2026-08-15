@@ -1,0 +1,4 @@
+Texturas originais dos kits da Kenney (CC0), acompanham os modelos .glb:
+- colormap.png : atlas de cores do Car Kit (carros, caminhoes)
+- demais .png  : texturas do Racing Kit (cenario)
+Fonte: https://kenney.nl  |  Licenca: CC0 (dominio publico)

@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Onde o UpdateService grava o APK. São dois caminhos porque
+  getExternalFilesDir() pode devolver nulo (armazenamento externo indisponível)
+  e o serviço cai no cacheDir.
+-->
+<paths>
+    <external-files-path name="atualizacoes" path="updates/" />
+    <cache-path name="atualizacoes-cache" path="updates/" />
+</paths>
