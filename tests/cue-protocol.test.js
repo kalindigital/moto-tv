@@ -8,6 +8,8 @@ import {
   serializeSinucaSetup,
   serializeJoin,
   serializeAssign,
+  serializeMode,
+  serializeHit,
   parseMessage,
 } from '../app/src/main/assets/web/shared/cue-protocol.js'
 
@@ -130,6 +132,60 @@ describe('cue-protocol · lobby de 2 celulares', () => {
       .toEqual({ t: 'turn', player: 1, group: null, ballInHand: false, phase: 'playing', winner: null, cid: 'abc' })
     expect(parseMessage('{"t":"turn","player":1,"phase":"playing","cid":"abc"}'))
       .toMatchObject({ type: 'turn', player: 1, controllerId: 'abc' })
+  })
+})
+
+describe('cue-protocol · modo de jogo (sozinho x multiplayer)', () => {
+  it('serializa o modo com a dificuldade', () => {
+    expect(JSON.parse(serializeMode('solo', 'facil'))).toEqual({ t: 'mode', mode: 'solo', dif: 'facil' })
+    expect(JSON.parse(serializeMode('multi'))).toEqual({ t: 'mode', mode: 'multi', dif: 'medio' })
+  })
+  it('parseia o modo e a dificuldade', () => {
+    expect(parseMessage('{"t":"mode","mode":"solo","dif":"dificil"}'))
+      .toEqual({ type: 'mode', mode: 'solo', dificuldade: 'dificil' })
+    expect(parseMessage('{"t":"mode","mode":"multi","dif":"medio"}'))
+      .toEqual({ type: 'mode', mode: 'multi', dificuldade: 'medio' })
+  })
+  it('dificuldade ausente ou inválida cai no intermediário', () => {
+    expect(parseMessage('{"t":"mode","mode":"solo"}'))
+      .toEqual({ type: 'mode', mode: 'solo', dificuldade: 'medio' })
+    expect(parseMessage('{"t":"mode","mode":"solo","dif":"impossivel"}'))
+      .toEqual({ type: 'mode', mode: 'solo', dificuldade: 'medio' })
+  })
+  it('modo desconhecido vira unknown', () => {
+    expect(parseMessage('{"t":"mode","mode":"coop"}')).toEqual({ type: 'unknown' })
+    expect(parseMessage('{"t":"mode"}')).toEqual({ type: 'unknown' })
+  })
+})
+
+describe('cue-protocol · efeito (onde o taco bate na branca)', () => {
+  it('aim e shoot levam o ponto de contato quando informado', () => {
+    expect(JSON.parse(serializeShoot(1, 0.5, 'abc', { x: 0.4, y: -0.6 })))
+      .toEqual({ t: 'shoot', a: 1, p: 0.5, id: 'abc', sx: 0.4, sy: -0.6 })
+    expect(parseMessage('{"t":"shoot","a":1,"p":0.5,"sx":0.4,"sy":-0.6}'))
+      .toEqual({ type: 'shoot', angle: 1, power: 0.5, efeito: { x: 0.4, y: -0.6 } })
+  })
+  it('faz clamp do efeito em [-1,1]', () => {
+    expect(parseMessage('{"t":"aim","a":0,"p":0.2,"sx":9,"sy":-9}'))
+      .toEqual({ type: 'aim', angle: 0, power: 0.2, efeito: { x: 1, y: -1 } })
+  })
+  it('sem efeito informado, a tacada segue sem a chave (compatível)', () => {
+    expect(parseMessage('{"t":"shoot","a":1,"p":0.5}'))
+      .toEqual({ type: 'shoot', angle: 1, power: 0.5 })
+  })
+})
+
+describe('cue-protocol · impacto (TV → celular, para vibrar)', () => {
+  it('serializa e parseia o impacto com intensidade', () => {
+    expect(JSON.parse(serializeHit(0.7))).toEqual({ t: 'hit', p: 0.7 })
+    expect(parseMessage('{"t":"hit","p":0.7}')).toEqual({ type: 'hit', power: 0.7 })
+  })
+  it('faz clamp da intensidade em [0,1]', () => {
+    expect(parseMessage('{"t":"hit","p":5}')).toEqual({ type: 'hit', power: 1 })
+    expect(parseMessage('{"t":"hit","p":-2}')).toEqual({ type: 'hit', power: 0 })
+  })
+  it('impacto sem número vira unknown', () => {
+    expect(parseMessage('{"t":"hit"}')).toEqual({ type: 'unknown' })
   })
 })
 

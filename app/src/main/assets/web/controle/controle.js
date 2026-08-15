@@ -12,7 +12,10 @@ import { serializeJoin, parseMessage } from '../shared/cue-protocol.js'
  * assim o jogador não é reatribuído ao trocar de tela.
  */
 
-const TELAS = ['tela-jogo', 'tela-preparacao', 'tela-controle', 'tela-sinuca-prep', 'tela-sinuca']
+const TELAS = [
+  'tela-jogo', 'tela-preparacao', 'tela-controle',
+  'tela-sinuca-modo', 'tela-sinuca-prep', 'tela-sinuca',
+]
 const ESPERA_MS = 1600      // tempo de tolerância para a TV responder ao join
 
 const meuId = (window.crypto && crypto.randomUUID)
@@ -33,7 +36,9 @@ function mostrar(id) {
 let resolvido = false
 
 async function entrarNaSinuca() {
-  mostrar('tela-sinuca-prep')
+  // O próprio sinuca-controle decide a tela certa (modo para o Jogador 1,
+  // controle direto para o Jogador 2).
+  mostrar('tela-sinuca-modo')
   await import('./sinuca-controle.js')
 }
 

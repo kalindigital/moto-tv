@@ -7,7 +7,7 @@
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <title>Controle — Moto TV</title>
+  <title>Controle — Joguinhos</title>
   <style>
     :root{
       --acento:#6E29F6;
@@ -146,13 +146,15 @@
     .jogo .tx .n{display:block;font-size:22px;font-weight:800}
     .jogo .tx .d{display:block;font-size:13px;color:var(--texto-fraco)}
 
-    /* ---------- sinuca: aparência (taco/mesa) ---------- */
-    #tela-sinuca-prep{flex-direction:column;align-items:center;justify-content:center;overflow-y:auto}
+    /* ---------- sinuca: modo e aparência ---------- */
+    #tela-sinuca-modo{flex-direction:column;align-items:center;justify-content:center;gap:18px;overflow-y:auto}
+    #tela-sinuca-modo h1,
     #tela-sinuca-prep h1{
       margin:0;font-size:clamp(24px,7vw,40px);letter-spacing:.08em;text-transform:uppercase;
       background:linear-gradient(90deg,var(--acento-claro),#fff);
       -webkit-background-clip:text;background-clip:text;color:transparent;
     }
+    #tela-sinuca-prep{flex-direction:column;align-items:center;justify-content:center;overflow-y:auto}
     #sinuca-comecar{
       width:100%;max-width:640px;min-height:64px;border-radius:16px;
       background:var(--acento);font-size:22px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;
@@ -168,9 +170,32 @@
     #sinuca-bih{display:none;margin:2px auto 0;font-size:12px;font-weight:800;color:#111;
       background:#ffd257;padding:3px 12px;border-radius:999px}
     #sinuca-bih.on{display:inline-block}
-    #padSinuca{flex:1 1 auto;width:100%;min-height:0;border-radius:20px;border:2px solid var(--acento);
+    #linhaPad{flex:1 1 auto;min-height:0;display:flex;gap:10px;align-items:stretch}
+    #padSinuca{flex:1 1 auto;height:100%;min-width:0;border-radius:20px;border:2px solid var(--acento);
       background:radial-gradient(130% 130% at 50% 40%,rgba(110,41,246,.20),rgba(110,41,246,.06));
       touch-action:none;display:block}
+    /* seletor de efeito: toque na bola branca onde o taco deve bater */
+    #efeitoCaixa{flex:0 0 auto;display:flex;flex-direction:column;align-items:center;gap:6px;
+      justify-content:center}
+    #efeitoCaixa .et{font-size:11px;letter-spacing:.14em;text-transform:uppercase;
+      color:var(--texto-fraco);font-weight:700}
+    #padEfeito{width:104px;height:104px;touch-action:none;border-radius:50%;
+      box-shadow:0 6px 18px rgba(0,0,0,.5)}
+    #efeitoCentro{font-size:12px;font-weight:600;color:var(--texto-fraco);
+      border:1px solid var(--borda);border-radius:10px;padding:6px 10px;background:var(--superficie)}
+    #efeitoCentro:active{background:var(--superficie-alta)}
+    @media (max-height:520px){ #padEfeito{width:84px;height:84px} }
+    /* medidor de força: enche conforme o puxão do taco */
+    #forcaBarra{position:relative;flex:0 0 auto;height:30px;border-radius:15px;overflow:hidden;
+      background:var(--superficie);border:1px solid var(--borda)}
+    #forcaPreenche{position:absolute;inset:0 auto 0 0;width:0%;border-radius:15px;
+      background:linear-gradient(90deg,var(--acento),#ff7a3d 78%,var(--erro));
+      transition:width .04s linear}
+    #forcaTexto{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+      font-size:13px;font-weight:800;letter-spacing:.1em;text-shadow:0 1px 3px rgba(0,0,0,.7)}
+    #forcaBarra.maxima #forcaPreenche{animation:pulsaForca .28s ease-in-out infinite alternate}
+    @keyframes pulsaForca{from{filter:brightness(1)}to{filter:brightness(1.45)}}
+
     .sinuca-acoes{display:flex;gap:8px;flex:0 0 auto}
     .sinuca-acoes button{flex:1;min-height:48px;border-radius:12px;background:var(--superficie);
       border:1px solid var(--borda);font-size:14px;font-weight:600}
@@ -266,6 +291,36 @@
     <button type="button" id="acelerar">ACELERAR</button>
   </main>
 
+  <!-- SINUCA — Tela 0: modo de jogo -->
+  <main id="tela-sinuca-modo" class="tela" hidden>
+    <h1>Sinuca</h1>
+    <div class="jogos" id="modos">
+      <button type="button" class="jogo" data-modo="solo">
+        <span class="ic">🤖</span>
+        <span class="tx"><span class="n">Sozinho</span><span class="d">Você contra a máquina</span></span>
+      </button>
+      <button type="button" class="jogo" data-modo="multi">
+        <span class="ic">👥</span>
+        <span class="tx"><span class="n">Multiplayer</span><span class="d">Outro jogador escaneia o QR da TV</span></span>
+      </button>
+    </div>
+
+    <div class="grupo" id="grupo-dificuldade" hidden>
+      <h2 class="rotulo">Dificuldade da máquina</h2>
+      <div class="opcoes" id="dificuldades" role="group" aria-label="Dificuldade">
+        <button type="button" class="opcao" data-dif="facil" aria-pressed="false">
+          <span class="nome">Fácil</span><span class="desc">erra bastante</span>
+        </button>
+        <button type="button" class="opcao" data-dif="medio" aria-pressed="true">
+          <span class="nome">Médio</span><span class="desc">equilibrada</span>
+        </button>
+        <button type="button" class="opcao" data-dif="dificil" aria-pressed="false">
+          <span class="nome">Difícil</span><span class="desc">acerta muito</span>
+        </button>
+      </div>
+    </div>
+  </main>
+
   <!-- SINUCA — Tela 1: aparência (taco e mesa) -->
   <main id="tela-sinuca-prep" class="tela" hidden>
     <h1>Sinuca</h1>
@@ -308,7 +363,15 @@
       <div id="sinuca-sub">Mesa aberta · arraste para trás e solte para tacar</div>
       <div id="sinuca-bih">Bola na mão</div>
     </div>
-    <canvas id="padSinuca"></canvas>
+    <div id="linhaPad">
+      <canvas id="padSinuca"></canvas>
+      <div id="efeitoCaixa">
+        <span class="et">Efeito</span>
+        <canvas id="padEfeito" width="120" height="120"></canvas>
+        <button type="button" id="efeitoCentro">Centro</button>
+      </div>
+    </div>
+    <div id="forcaBarra"><i id="forcaPreenche"></i><span id="forcaTexto">Força 0%</span></div>
     <div class="sinuca-acoes">
       <button type="button" id="sinuca-posicionar" hidden>Posicionar branca</button>
       <button type="button" id="sinuca-reiniciar">Reiniciar</button>

@@ -79,11 +79,26 @@ function retanguloArredondado(ctx, x, y, w, h, raio) {
   ctx.closePath()
 }
 
+/**
+ * Desenha uma bola vista de cima com aparência de esfera ROLANDO.
+ *
+ * O truque: a bola guarda `fase` (quanto já girou, em radianos) e `dirx/diry`
+ * (para onde rolou por último). O número e a faixa não ficam parados no meio —
+ * eles passeiam pela superfície na direção do movimento (deslocamento
+ * `sin(fase)`) e somem quando passam para o outro lado da esfera
+ * (`cos(fase) < 0`), reaparecendo depois. É o que o olho lê como rolamento.
+ */
 function desenharBola(ctx, layout, bola) {
   const cx = layout.px(bola.x)
   const cy = layout.py(bola.y)
   const raio = layout.pr(MESA.r)
   const cor = corDaBola(bola.id)
+
+  const fase = bola.fase || 0
+  const ux = bola.dirx != null ? bola.dirx : 1
+  const uy = bola.diry != null ? bola.diry : 0
+  const desloc = Math.sin(fase)      // -1..1: posição da marca na esfera
+  const frente = Math.cos(fase)      // > 0: a marca está virada para cima
 
   ctx.save()
   // sombra no pano
@@ -98,35 +113,70 @@ function desenharBola(ctx, layout, bola) {
   ctx.fillStyle = ehListrada(bola.id) ? '#f4f1e8' : cor
   ctx.fill()
 
-  // faixa das listradas
+  // tudo o que é "pintado na casca" fica preso ao círculo da bola
+  ctx.save()
+  ctx.beginPath()
+  ctx.arc(cx, cy, raio, 0, Math.PI * 2)
+  ctx.clip()
+
+  // faixa das listradas: acompanha o rolamento (anda e afina ao virar)
   if (ehListrada(bola.id)) {
+    const fx = cx + ux * raio * desloc
+    const fy = cy + uy * raio * desloc
+    const espessura = raio * (0.35 + 0.7 * Math.abs(frente))
     ctx.save()
-    ctx.beginPath()
-    ctx.arc(cx, cy, raio, 0, Math.PI * 2)
-    ctx.clip()
+    ctx.translate(fx, fy)
+    ctx.rotate(Math.atan2(uy, ux) + Math.PI / 2)   // faixa perpendicular à rolagem
     ctx.fillStyle = cor
-    ctx.fillRect(cx - raio, cy - raio * 0.52, raio * 2, raio * 1.04)
+    ctx.fillRect(-raio * 1.6, -espessura / 2, raio * 3.2, espessura)
     ctx.restore()
   }
 
-  // disco branco central + número (menos a branca)
-  if (bola.id !== 0) {
+  // disco branco + número: passeia pela superfície e some do outro lado
+  if (bola.id !== 0 && frente > 0.05) {
+    const nx = cx + ux * raio * 0.62 * desloc
+    const ny = cy + uy * raio * 0.62 * desloc
+    const escala = frente          // achata ao se aproximar da borda (perspectiva)
+    ctx.save()
+    ctx.translate(nx, ny)
+    ctx.rotate(Math.atan2(uy, ux))
+    ctx.scale(Math.max(0.12, escala), 1)
     ctx.beginPath()
-    ctx.arc(cx, cy, raio * 0.46, 0, Math.PI * 2)
+    ctx.arc(0, 0, raio * 0.46, 0, Math.PI * 2)
     ctx.fillStyle = '#fbfaf5'
     ctx.fill()
-    ctx.fillStyle = '#15151c'
-    ctx.font = `700 ${Math.max(6, raio * 0.62)}px "Roboto Condensed",system-ui,sans-serif`
-    ctx.textAlign = 'center'
-    ctx.textBaseline = 'middle'
-    ctx.fillText(String(bola.id), cx, cy + raio * 0.04)
-  }
+    ctx.restore()
 
-  // brilho especular
+    if (escala > 0.45) {   // só escreve o número quando dá para ler
+      ctx.save()
+      ctx.globalAlpha = Math.min(1, (escala - 0.45) / 0.3)
+      ctx.fillStyle = '#15151c'
+      ctx.font = `700 ${Math.max(6, raio * 0.6)}px "Roboto Condensed",system-ui,sans-serif`
+      ctx.textAlign = 'center'
+      ctx.textBaseline = 'middle'
+      ctx.fillText(String(bola.id), nx, ny + raio * 0.04)
+      ctx.restore()
+    }
+  }
+  ctx.restore()   // fim do recorte da casca
+
+  // sombreado da esfera: escurece a borda e dá volume
+  const sombra = ctx.createRadialGradient(
+    cx - raio * 0.3, cy - raio * 0.35, raio * 0.1, cx, cy, raio,
+  )
+  sombra.addColorStop(0, 'rgba(255,255,255,0)')
+  sombra.addColorStop(0.72, 'rgba(0,0,0,.05)')
+  sombra.addColorStop(1, 'rgba(0,0,0,.42)')
+  ctx.beginPath()
+  ctx.arc(cx, cy, raio, 0, Math.PI * 2)
+  ctx.fillStyle = sombra
+  ctx.fill()
+
+  // brilho especular (fixo: é o reflexo da luz, não gira com a bola)
   ctx.beginPath()
   ctx.arc(cx - raio * 0.32, cy - raio * 0.34, raio * 0.42, 0, Math.PI * 2)
   const g = ctx.createRadialGradient(cx - raio * 0.32, cy - raio * 0.34, 0, cx - raio * 0.32, cy - raio * 0.34, raio * 0.5)
-  g.addColorStop(0, 'rgba(255,255,255,.55)')
+  g.addColorStop(0, 'rgba(255,255,255,.62)')
   g.addColorStop(1, 'rgba(255,255,255,0)')
   ctx.fillStyle = g
   ctx.fill()
@@ -190,8 +240,11 @@ export function desenhar(ctx, layout, cena) {
     const dy = Math.sin(aim.angle)
     const raio = layout.pr(MESA.r)
 
-    // linha de mira pontilhada à frente da branca
+    // linha de mira pontilhada à frente da branca, presa ao pano (sem vazar
+    // para a madeira, que ficava com cara de erro de desenho)
     ctx.save()
+    retanguloArredondado(ctx, x0, y0, larg, alt, b * 0.35)
+    ctx.clip()
     ctx.setLineDash([layout.escala * 1.5, layout.escala * 1.5])
     ctx.strokeStyle = 'rgba(255,255,255,.75)'
     ctx.lineWidth = Math.max(1, layout.escala * 0.5)

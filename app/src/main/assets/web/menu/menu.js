@@ -10,29 +10,13 @@ const JOGOS = ['moto', 'sinuca']
 const DESTINO = { moto: '/game/index.html', sinuca: '/sinuca/index.html' }
 
 const el = (id) => document.getElementById(id)
-const cards = Array.from(document.querySelectorAll('.card'))
-let selecionado = 0
 let navegando = false
-
-function marcar() {
-  cards.forEach((c, i) => c.setAttribute('aria-selected', String(i === selecionado)))
-}
-
-function mover(delta) {
-  selecionado = (selecionado + delta + cards.length) % cards.length
-  marcar()
-}
 
 function navegar(game) {
   if (navegando || !DESTINO[game]) return
   navegando = true
   location.href = DESTINO[game]
 }
-
-// ------------------------------------------------------------- clique (dev/mouse)
-cards.forEach((c, i) => {
-  c.addEventListener('click', () => { selecionado = i; marcar(); navegar(c.dataset.game) })
-})
 
 // ------------------------------------------------------------- QR (via /config)
 fetch('/config')
@@ -92,13 +76,8 @@ function connectWs() {
 connectWs()
 
 // ------------------------------------------------------------- controle da TV
+// A TV é só a vitrine: quem escolhe o jogo é o celular. O OK aqui serve apenas
+// para confirmar a atualização quando o banner está na tela.
 addEventListener('keydown', (e) => {
-  if (e.key === 'ArrowLeft') mover(-1)
-  else if (e.key === 'ArrowRight') mover(1)
-  else if (e.key === 'Enter') {
-    if (atualizacao && !atualizando) { iniciarAtualizacao(); return }
-    navegar(cards[selecionado].dataset.game)
-  }
+  if (e.key === 'Enter' && atualizacao && !atualizando) iniciarAtualizacao()
 })
-
-marcar()

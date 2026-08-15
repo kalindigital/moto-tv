@@ -1,7 +1,10 @@
-import { collideElastic, reflectCushion, stepBall } from '../shared/billiards.js'
+import {
+  collideElastic, reflectCushion, stepBall, curvarPorEfeito, seguirOuPuxar,
+} from '../shared/billiards.js'
 import { initialState, resolveShot } from '../shared/pool-rules.js'
-import { parseMessage, serializeTurn, serializeAssign } from '../shared/cue-protocol.js'
-import { MESA, MESAS, TACOS, bounds, pockets, criarLayout, desenhar } from './mesa.js'
+import { parseMessage, serializeTurn, serializeAssign, serializeHit } from '../shared/cue-protocol.js'
+import { escolherTacada } from '../shared/pool-ai.js'
+import { MESA, MESAS, TACOS, corDaBola, ehListrada, bounds, pockets, criarLayout, desenhar } from './mesa.js'
 import { criarSons } from './audio.js'
 
 /**
@@ -21,6 +24,11 @@ const MAX_SPEED = 460      // velocidade da branca com força máxima (u/s)
 const DECEL = 155          // atrito de rolamento (u/s²) — quanto menor, mais ela desliza
 const MINSPEED = 1.6       // abaixo disso a bola para de vez (baixo = parada macia)
 const REST_BOLA = 0.965    // restituição bola↔bola (quase elástica)
+// Efeito: o quanto a curva entorta a trajetória por segundo e a força do
+// seguir/puxar depois do toque. Valores de "sente mas não vira videogame maluco".
+const CURVA_K = 1.15
+const PUXA_FORCA = 165
+const EFEITO_DECAI = 1.9   // o giro morre com o tempo, como na mesa de verdade
 const CABECA = { x: MESA.W * 0.25, y: MESA.H / 2 }
 
 const limites = bounds()
@@ -32,6 +40,8 @@ let fase = 'espera'                 // espera | mirando | simulando | fim
 let balls = []
 let regras = initialState()
 let aim = { ativo: false, angle: 0, power: 0.5 }
+let efeito = { x: 0, y: 0 }      // onde o taco bate na branca (escolhido no celular)
+let giroVivo = { x: 0, y: 0 }    // o efeito que ainda resta na branca durante a jogada
 let qrAberto = false
 let aparencia = { felt: MESAS.verde, tacoCor: TACOS.classico }
 let caindo = []          // bolas em animação de queda na caçapa
@@ -41,6 +51,12 @@ const DUR_QUEDA = 0.34   // segundos da animação
 const controladores = { 1: null, 2: null }
 const vistoEm = {}            // id → instante do último sinal de vida
 const VAGA_OCIOSA_MS = 8000   // sem batimento por tanto tempo, a vaga é reciclada
+
+// Modo da partida: 'multi' (dois celulares) ou 'solo' (Jogador 2 é a máquina).
+let modo = 'multi'
+let dificuldade = 'medio'
+let pensando = false          // a máquina está "mirando" (espera antes de tacar)
+const PENSA_MS = 1100
 
 // trackers de uma tacada
 let firstContact = null
@@ -82,7 +98,9 @@ function embaralhar(a) {
 }
 
 function novaBola(id, x, y) {
-  return { id, x, y, vx: 0, vy: 0, r: MESA.r, potted: false }
+  // fase/dirx/diry descrevem o rolamento (ver desenharBola em mesa.js):
+  // quanto a bola já girou e em que direção rolou por último.
+  return { id, x, y, vx: 0, vy: 0, r: MESA.r, potted: false, fase: 0, dirx: 1, diry: 0 }
 }
 
 function montarBolas() {
@@ -156,6 +174,8 @@ function tacar(angle, power) {
   if (v <= 0) return
   cue.vx = Math.cos(angle) * v
   cue.vy = Math.sin(angle) * v
+  // O efeito escolhido no celular vale para esta tacada e vai morrendo ao rolar.
+  giroVivo = { x: efeito.x, y: efeito.y }
   firstContact = null
   contato = false
   railAposContato = false
@@ -194,7 +214,24 @@ function subPasso(dt, ativos) {
   for (const b of ativos) {
     if (b.potted) continue
     const vAntes = Math.hypot(b.vx, b.vy)
+    const xAntes = b.x
+    const yAntes = b.y
     stepBall(b, dt, DECEL, MINSPEED)
+
+    // efeito lateral: só a branca curva, e só enquanto o giro não morreu
+    if (b.id === 0 && giroVivo.x) {
+      curvarPorEfeito(b, giroVivo.x, dt, CURVA_K)
+      giroVivo.x -= giroVivo.x * EFEITO_DECAI * dt
+      if (Math.abs(giroVivo.x) < 0.01) giroVivo.x = 0
+    }
+
+    // rolamento: o giro é o quanto andou dividido pelo raio (bola sem derrapar)
+    const andou = Math.hypot(b.x - xAntes, b.y - yAntes)
+    if (andou > 1e-6) {
+      b.dirx = (b.x - xAntes) / andou
+      b.diry = (b.y - yAntes) / andou
+      b.fase = (b.fase + andou / b.r) % (Math.PI * 2)
+    }
 
     let naBoca = false
     for (const p of pocs) {
@@ -206,7 +243,9 @@ function subPasso(dt, ativos) {
 
     if (!naBoca && reflectCushion(b, limites, MESA.restituicao)) {
       if (contato) railAposContato = true
-      sons.tabela(Math.min(1, vAntes / MAX_SPEED))
+      const forca = Math.min(1, vAntes / MAX_SPEED)
+      sons.tabela(forca)
+      avisarImpacto(forca * 0.6)   // tabela sacode menos que bola em bola
     }
 
     // rede de segurança: se por acaso escapou da mesa, engole
@@ -222,10 +261,22 @@ function subPasso(dt, ativos) {
       if (c.potted) continue
       const vrel = Math.hypot(a.vx - c.vx, a.vy - c.vy)
       if (collideElastic(a, c, REST_BOLA)) {
-        sons.bola(Math.min(1, vrel / MAX_SPEED))
+        const forca = Math.min(1, vrel / MAX_SPEED)
+        sons.bola(forca)
+        avisarImpacto(forca)
         if (!contato && (a.id === 0 || c.id === 0)) {
           firstContact = (a.id === 0 ? c : a).id
           contato = true
+          // taco alto/baixo: no toque, a branca segue em frente ou volta
+          if (giroVivo.y) {
+            const branca = a.id === 0 ? a : c
+            const alvo = a.id === 0 ? c : a
+            const dx = alvo.x - branca.x
+            const dy = alvo.y - branca.y
+            const d = Math.hypot(dx, dy) || 1
+            seguirOuPuxar(branca, giroVivo.y, dx / d, dy / d, PUXA_FORCA * forca)
+            giroVivo.y = 0
+          }
         }
       }
     }
@@ -278,8 +329,10 @@ function finalizarTacada() {
   if (cuePotted) posicionarBrancaLivre(CABECA.x, CABECA.y)
 
   fase = 'mirando'
+  aim.ativo = false
   atualizarHud()
   enviarTurno()
+  talvezJogarMaquina()
 }
 
 // --------------------------------------------------- lobby de 2 celulares
@@ -301,7 +354,9 @@ function onJoin(id) {
     else {
       // Ambas as vagas ocupadas: fica com a de quem parou de dar sinal (saiu ou
       // recarregou a página, voltando com outro id). Senão, ignora o extra.
-      const ocioso = (slot) => agora - (vistoEm[controladores[slot]] || 0) > VAGA_OCIOSA_MS
+      // No solo a vaga 2 é da máquina e nunca é cedida.
+      const ocioso = (slot) => controladores[slot] !== 'maquina'
+        && agora - (vistoEm[controladores[slot]] || 0) > VAGA_OCIOSA_MS
       if (ocioso(1)) controladores[1] = id
       else if (ocioso(2)) controladores[2] = id
       else return
@@ -316,25 +371,32 @@ function onJoin(id) {
 function atualizarEspera() {
   const status = el('esperaStatus')
   if (!status) return
-  const n = (controladores[1] ? 1 : 0) + (controladores[2] ? 1 : 0)
-  if (n === 0) status.textContent = 'Escaneie o QR para entrar como Jogador 1'
-  else if (n === 1) status.textContent = '✓ Jogador 1 pronto — Jogador 2, escaneie o mesmo QR (ou comece sozinho)'
-  else status.textContent = '✓ Jogadores 1 e 2 prontos — Jogador 1, escolha a mesa e comece'
+  if (!controladores[1]) {
+    status.textContent = 'Escaneie o QR para entrar como Jogador 1'
+  } else if (modo === 'solo') {
+    status.textContent = '✓ Jogador 1 pronto — partida contra a máquina'
+  } else if (!controladores[2]) {
+    status.textContent = '✓ Jogador 1 pronto — Jogador 2, escaneie este QR para entrar'
+  } else {
+    status.textContent = '✓ Jogadores 1 e 2 prontos — é só começar'
+  }
 }
 
 // ------------------------------------------------------------------- entrada
-function onAim(angle, power, id) {
+function onAim(angle, power, id, novoEfeito) {
   if (!podeJogar(id)) return
   sons.liberar()
   comecarSeNecessario()
   if (fase !== 'mirando') return
   aim = { ativo: true, angle, power }
+  efeito = novoEfeito || { x: 0, y: 0 }
 }
 
-function onShoot(angle, power, id) {
+function onShoot(angle, power, id, novoEfeito) {
   if (!podeJogar(id)) return
   sons.liberar()
   comecarSeNecessario()
+  efeito = novoEfeito || { x: 0, y: 0 }
   tacar(angle, power)
 }
 
@@ -356,6 +418,24 @@ function aplicarAparencia(taco, mesa) {
   aparencia = { felt: MESAS[mesa] || MESAS.verde, tacoCor: TACOS[taco] || TACOS.classico }
 }
 
+/**
+ * Define o modo. No solo a vaga 2 fica com a máquina (nenhum celular a toma);
+ * no multi ela é liberada para o segundo jogador escanear o QR.
+ */
+function aplicarModo(novoModo, nivel) {
+  modo = novoModo
+  dificuldade = nivel || 'medio'
+  if (modo === 'solo') {
+    controladores[2] = 'maquina'
+  } else if (controladores[2] === 'maquina') {
+    controladores[2] = null
+  }
+  atualizarEspera()
+  atualizarHud()
+  enviarTurno()
+  talvezJogarMaquina()
+}
+
 // ----------------------------------------------------------------------- QR
 function alternarQr() {
   qrAberto = !qrAberto
@@ -364,13 +444,77 @@ function alternarQr() {
 
 // -------------------------------------------------------------------- HUD
 const nomeGrupo = (g) => (g === 'solid' ? 'Lisas' : g === 'stripe' ? 'Listradas' : 'Mesa aberta')
+const nomeJogador = (n) => (n === 2 && modo === 'solo' ? 'Máquina' : `Jogador ${n}`)
 
 function atualizarHud() {
-  el('vez').textContent = `Jogador ${regras.turn}`
+  el('vez').textContent = nomeJogador(regras.turn)
   el('grupo').textContent = regras.open ? 'Mesa aberta' : nomeGrupo(regras.groups[regras.turn])
   el('recado').textContent = regras.reason || ''
   el('bih').classList.toggle('oculto', !regras.ballInHand)
   document.body.dataset.jogador = String(regras.turn)
+  atualizarRacks()
+}
+
+/** Placar inferior: as bolas que cada lado já encaçapou. */
+function atualizarRacks() {
+  el('racks').classList.remove('oculto')
+  el('nomeP2').textContent = nomeJogador(2)
+  el('rackP1').classList.toggle('vez', regras.turn === 1)
+  el('rackP2').classList.toggle('vez', regras.turn === 2)
+
+  for (const jogador of [1, 2]) {
+    const grupo = regras.groups[jogador]
+    el(`grupoP${jogador}`).textContent = grupo ? `· ${nomeGrupo(grupo)}` : ''
+    const caixa = el(`bolasP${jogador}`)
+    const feitas = balls.filter((b) => b.potted && b.id !== 0 && b.id !== 8
+      && (grupo === 'solid' ? b.id <= 7 : grupo === 'stripe' ? b.id >= 9 : false))
+
+    caixa.innerHTML = ''
+    if (!grupo || feitas.length === 0) {
+      const vazio = document.createElement('span')
+      vazio.className = 'vazio'
+      vazio.textContent = grupo ? 'nenhuma bola ainda' : 'grupo a definir'
+      caixa.appendChild(vazio)
+      continue
+    }
+    for (const b of feitas.sort((x, y) => x.id - y.id)) {
+      const mini = document.createElement('span')
+      mini.className = `mini ${ehListrada(b.id) ? 'listrada' : 'solida'}`
+      mini.style.setProperty('--c', corDaBola(b.id))
+      if (!ehListrada(b.id)) mini.style.background = corDaBola(b.id)
+      mini.textContent = String(b.id)
+      caixa.appendChild(mini)
+    }
+  }
+}
+
+// ----------------------------------------------------------- máquina (solo)
+/** Na vez da máquina, ela "pensa" um instante e taca sozinha. */
+function talvezJogarMaquina() {
+  if (modo !== 'solo' || fase !== 'mirando' || pensando) return
+  if (regras.turn !== 2 || regras.phase === 'gameover') return
+  pensando = true
+  el('recado').textContent = 'A máquina está mirando…'
+
+  setTimeout(() => {
+    pensando = false
+    if (modo !== 'solo' || fase !== 'mirando' || regras.turn !== 2) return
+
+    // Bola na mão da máquina: recoloca a branca antes de mirar.
+    if (regras.ballInHand) posicionarBrancaLivre(CABECA.x, CABECA.y)
+
+    const escolha = escolherTacada(balls, pocs, {
+      grupo: regras.open ? null : regras.groups[2],
+      mesaAberta: regras.open,
+      dificuldade,
+    })
+    if (!escolha) return
+    aim = { ativo: true, angle: escolha.angle, power: escolha.power }
+    // mostra a mira por um instante antes de bater — fica mais natural
+    setTimeout(() => {
+      if (fase === 'mirando' && regras.turn === 2) tacar(escolha.angle, escolha.power)
+    }, 450)
+  }, PENSA_MS)
 }
 
 // ------------------------------------------------------------- turno → celular
@@ -378,6 +522,18 @@ let socket = null
 
 function enviar(msg) {
   if (socket && socket.readyState === WebSocket.OPEN) socket.send(msg)
+}
+
+// O celular vibra a cada pancada: mandamos no máximo um aviso a cada 120 ms
+// (uma tacada gera dezenas de colisões) e só o que dá para sentir.
+let ultimoImpacto = 0
+
+function avisarImpacto(forca) {
+  if (forca < 0.06) return
+  const agora = performance.now()
+  if (agora - ultimoImpacto < 120) return
+  ultimoImpacto = agora
+  enviar(serializeHit(forca))
 }
 
 function enviarTurno() {
@@ -403,9 +559,10 @@ function connectWs() {
     // quando a aparência é confirmada ou na primeira mira/tacada.
     if (m.type === 'pick' && m.game === 'sinuca') enviarTurno()
     else if (m.type === 'join') onJoin(m.id)
+    else if (m.type === 'mode') aplicarModo(m.mode, m.dificuldade)
     else if (m.type === 'sinucaSetup') { aplicarAparencia(m.taco, m.mesa); comecarSeNecessario() }
-    else if (m.type === 'aim') onAim(m.angle, m.power, m.id)
-    else if (m.type === 'shoot') onShoot(m.angle, m.power, m.id)
+    else if (m.type === 'aim') onAim(m.angle, m.power, m.id, m.efeito)
+    else if (m.type === 'shoot') onShoot(m.angle, m.power, m.id, m.efeito)
     else if (m.type === 'place') onPlace(m.x, m.y, m.id)
     else if (m.type === 'action') comando(m.name)
   }
@@ -490,6 +647,15 @@ function frame(agora) {
   ultimo = agora
 
   if (fase === 'simulando') simular(dt)
+
+  // Ao parar, a bola "assenta" com a marca para cima: sem isso metade da mesa
+  // fica com bolas sem número visível e o jogador não identifica o que é o quê.
+  for (const b of balls) {
+    if (b.potted || b.vx !== 0 || b.vy !== 0 || !b.fase) continue
+    const alvo = b.fase > Math.PI ? Math.PI * 2 : 0
+    b.fase += (alvo - b.fase) * Math.min(1, dt * 7)
+    if (Math.abs(alvo - b.fase) < 0.02) b.fase = 0
+  }
 
   // avança a animação das bolas caindo e descarta as que terminaram
   if (caindo.length) {

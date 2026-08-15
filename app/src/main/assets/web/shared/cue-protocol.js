@@ -6,6 +6,8 @@
 const JOGOS_VALIDOS = ['moto', 'sinuca']
 const TACOS_VALIDOS = ['classico', 'grafite', 'vermelho']
 const MESAS_VALIDAS = ['verde', 'azul', 'vinho']
+const MODOS_VALIDOS = ['solo', 'multi']
+const DIFICULDADES_VALIDAS = ['facil', 'medio', 'dificil']
 
 const clamp01 = (v) => Math.max(0, Math.min(1, v))
 
@@ -13,15 +15,17 @@ export function serializePick(game) {
   return JSON.stringify({ t: 'pick', game })
 }
 // O `id` (opcional) identifica o celular que enviou — usado no modo 2 jogadores.
-export function serializeAim(angle, power, id) {
-  const m = { t: 'aim', a: angle, p: power }
+// `efeito` (opcional) é onde o taco bate na branca: x lateral, y vertical, -1..1.
+function comEfeito(m, id, efeito) {
   if (id) m.id = id
+  if (efeito && (efeito.x || efeito.y)) { m.sx = efeito.x; m.sy = efeito.y }
   return JSON.stringify(m)
 }
-export function serializeShoot(angle, power, id) {
-  const m = { t: 'shoot', a: angle, p: power }
-  if (id) m.id = id
-  return JSON.stringify(m)
+export function serializeAim(angle, power, id, efeito) {
+  return comEfeito({ t: 'aim', a: angle, p: power }, id, efeito)
+}
+export function serializeShoot(angle, power, id, efeito) {
+  return comEfeito({ t: 'shoot', a: angle, p: power }, id, efeito)
 }
 export function serializePlace(x, y, id) {
   const m = { t: 'place', x, y }
@@ -31,8 +35,17 @@ export function serializePlace(x, y, id) {
 export function serializeJoin(id) {
   return JSON.stringify({ t: 'join', id })
 }
+// Modo da partida: 'solo' (contra a máquina) ou 'multi' (dois celulares).
+// A dificuldade só interessa ao solo, mas viaja sempre para simplificar.
+export function serializeMode(mode, dificuldade) {
+  return JSON.stringify({ t: 'mode', mode, dif: DIFICULDADES_VALIDAS.includes(dificuldade) ? dificuldade : 'medio' })
+}
 export function serializeAssign(id, player) {
   return JSON.stringify({ t: 'assign', id, player })
+}
+// Impacto na mesa (TV → celular): serve para o celular vibrar junto da tacada.
+export function serializeHit(intensidade) {
+  return JSON.stringify({ t: 'hit', p: intensidade })
 }
 export function serializeSinucaSetup(taco, mesa) {
   return JSON.stringify({ t: 'sinucaSetup', taco, mesa })
@@ -61,12 +74,26 @@ export function parseMessage(str) {
   if ((m.t === 'aim' || m.t === 'shoot') && Number.isFinite(m.a) && Number.isFinite(m.p)) {
     const r = { type: m.t, angle: m.a, power: clamp01(m.p) }
     if (typeof m.id === 'string') r.id = m.id
+    if (Number.isFinite(m.sx) || Number.isFinite(m.sy)) {
+      const eixo = (v) => Math.max(-1, Math.min(1, Number.isFinite(v) ? v : 0))
+      r.efeito = { x: eixo(m.sx), y: eixo(m.sy) }
+    }
     return r
   }
   if (m.t === 'place' && Number.isFinite(m.x) && Number.isFinite(m.y)) {
     const r = { type: 'place', x: clamp01(m.x), y: clamp01(m.y) }
     if (typeof m.id === 'string') r.id = m.id
     return r
+  }
+  if (m.t === 'hit' && Number.isFinite(m.p)) {
+    return { type: 'hit', power: clamp01(m.p) }
+  }
+  if (m.t === 'mode' && MODOS_VALIDOS.includes(m.mode)) {
+    return {
+      type: 'mode',
+      mode: m.mode,
+      dificuldade: DIFICULDADES_VALIDAS.includes(m.dif) ? m.dif : 'medio',
+    }
   }
   if (m.t === 'join' && typeof m.id === 'string') {
     return { type: 'join', id: m.id }

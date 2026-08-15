@@ -74,6 +74,32 @@ export function stepBall(ball, dt, decel, minSpeed) {
   }
 }
 
+/**
+ * Efeito lateral ("inglês"): bater fora do centro faz a bola sair girando de
+ * lado e desenhar uma curva enquanto rola. Modelamos girando a direção da
+ * velocidade — o módulo não muda, só o rumo.
+ * `lateral` vai de -1 (esquerda) a 1 (direita); `k` é o quanto curva por segundo.
+ */
+export function curvarPorEfeito(ball, lateral, dt, k) {
+  if (!lateral) return
+  const speed = Math.hypot(ball.vx, ball.vy)
+  if (speed === 0) return
+  const ang = Math.atan2(ball.vy, ball.vx) + lateral * k * dt
+  ball.vx = Math.cos(ang) * speed
+  ball.vy = Math.sin(ang) * speed
+}
+
+/**
+ * Efeito de cima/baixo aplicado no instante do toque na bola-objeto: taco alto
+ * (`vertical` > 0) faz a branca seguir em frente; taco baixo (< 0) faz ela
+ * voltar. `nx,ny` é a normal do choque (da branca para a bola atingida).
+ */
+export function seguirOuPuxar(cue, vertical, nx, ny, forca) {
+  if (!vertical) return
+  cue.vx += nx * vertical * forca
+  cue.vy += ny * vertical * forca
+}
+
 /** True se o centro da bola caiu dentro do raio de captura de alguma caçapa. */
 export function pocketed(ball, pockets, captureRadius) {
   return pockets.some((p) => Math.hypot(ball.x - p.x, ball.y - p.y) <= captureRadius)

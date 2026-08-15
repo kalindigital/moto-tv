@@ -12,7 +12,7 @@
 
     <application
         android:allowBackup="true"
-        android:label="Moto TV"
+        android:label="Joguinhos"
         android:icon="@mipmap/ic_launcher"
         android:banner="@drawable/banner"
         android:usesCleartextTraffic="false"

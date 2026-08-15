@@ -5,6 +5,8 @@ import {
   stepBall,
   pocketed,
   allAtRest,
+  curvarPorEfeito,
+  seguirOuPuxar,
 } from '../app/src/main/assets/web/shared/billiards.js'
 
 const bola = (x, y, vx = 0, vy = 0, r = 1) => ({ x, y, vx, vy, r })
@@ -77,6 +79,49 @@ describe('billiards · integração com atrito', () => {
     stepBall(b, 1, 1, 0.05) // desaceleração forte + limiar 0.05
     expect(b.vx).toBe(0)
     expect(b.vy).toBe(0)
+  })
+})
+
+describe('billiards · efeito lateral (curva)', () => {
+  it('efeito para a direita curva a trajetória sem mudar a velocidade', () => {
+    const b = bola(0, 0, 10, 0)
+    curvarPorEfeito(b, 1, 0.1, 2)      // k=2 → gira 2·1·0.1 = 0.2 rad
+    expect(Math.hypot(b.vx, b.vy)).toBeCloseTo(10, 6)
+    expect(Math.atan2(b.vy, b.vx)).toBeCloseTo(0.2, 6)
+  })
+  it('efeito para a esquerda curva para o outro lado', () => {
+    const b = bola(0, 0, 10, 0)
+    curvarPorEfeito(b, -1, 0.1, 2)
+    expect(Math.atan2(b.vy, b.vx)).toBeCloseTo(-0.2, 6)
+  })
+  it('sem efeito, nada muda', () => {
+    const b = bola(0, 0, 10, 0)
+    curvarPorEfeito(b, 0, 0.1, 2)
+    expect(b.vy).toBeCloseTo(0, 9)
+  })
+  it('bola parada não curva (não há trajetória para desviar)', () => {
+    const b = bola(0, 0, 0, 0)
+    curvarPorEfeito(b, 1, 0.1, 2)
+    expect(b.vx).toBe(0)
+    expect(b.vy).toBe(0)
+  })
+})
+
+describe('billiards · efeito de cima/baixo (seguir e puxar)', () => {
+  it('taco alto: a branca segue a bola após o toque', () => {
+    const cue = bola(0, 0, 0, 0)
+    seguirOuPuxar(cue, 1, 1, 0, 10)     // normal apontando para +x
+    expect(cue.vx).toBeCloseTo(10, 6)
+  })
+  it('taco baixo: a branca volta após o toque', () => {
+    const cue = bola(0, 0, 0, 0)
+    seguirOuPuxar(cue, -1, 1, 0, 10)
+    expect(cue.vx).toBeCloseTo(-10, 6)
+  })
+  it('taco no meio não altera nada', () => {
+    const cue = bola(0, 0, 3, 0)
+    seguirOuPuxar(cue, 0, 1, 0, 10)
+    expect(cue.vx).toBeCloseTo(3, 6)
   })
 })
 

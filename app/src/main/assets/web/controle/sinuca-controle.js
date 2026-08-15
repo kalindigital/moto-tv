@@ -1,6 +1,6 @@
 import {
   serializePick, serializeAim, serializeShoot, serializePlace, serializeSinucaSetup,
-  serializeJoin, parseMessage,
+  serializeJoin, serializeMode, parseMessage,
 } from '../shared/cue-protocol.js'
 import { serializeAction } from '../shared/protocol.js'
 
@@ -16,8 +16,12 @@ import { serializeAction } from '../shared/protocol.js'
 const el = (id) => document.getElementById(id)
 const dot = el('dot')
 const conn = el('conn')
+const telaModo = el('tela-sinuca-modo')
 const telaPrep = el('tela-sinuca-prep')
 const telaCtrl = el('tela-sinuca')
+const forcaBarra = el('forcaBarra')
+const forcaPreenche = el('forcaPreenche')
+const forcaTexto = el('forcaTexto')
 const pad = el('padSinuca')
 const ctx = pad.getContext('2d')
 const botaoPos = el('sinuca-posicionar')
@@ -34,8 +38,11 @@ let ws = null
 let taco = 'classico'
 let mesa = 'verde'
 let ultimoSetup = null
+let ultimoModo = null    // reenviado se a TV recarregar no meio da partida
 let ballInHand = false
 let modoPosicionar = false
+let modo = null          // 'solo' | 'multi' — escolhido pelo Jogador 1
+let dificuldade = 'medio'
 let meuPlayer = (window.__ctrl && window.__ctrl.player) || null   // 1 ou 2, atribuído pela TV
 let primeiroTurno = true // o 1º 'turn' decide a tela (aparência x pad)
 let vezAtual = 1         // de quem é a vez (do último 'turn')
@@ -62,6 +69,7 @@ function connect() {
     conn.textContent = 'conectado'
     enviar(serializePick('sinuca'))    // pede à TV para abrir a sinuca
     enviar(serializeJoin(meuId))       // (re)entra no lobby: vira Jogador 1 ou 2
+    if (ultimoModo) enviar(ultimoModo)
     if (ultimoSetup) enviar(ultimoSetup)
     // O join também é batimento: enquanto não há vaga ele insiste, e depois
     // mantém a TV sabendo que este celular continua vivo (para reciclar a vaga
@@ -80,11 +88,14 @@ function connect() {
     const m = parseMessage(ev.data)
     if (m.type === 'assign' && m.id === meuId) aplicarAtribuicao(m.player)
     else if (m.type === 'turn') aplicarTurno(m)
+    // Pancada na mesa: o celular treme junto, na medida do impacto.
+    else if (m.type === 'hit') vibrar(Math.round(8 + m.power * 42))
   }
 }
 
 function irParaPad() {
   if (telaCtrl.hidden) {
+    telaModo.hidden = true
     telaPrep.hidden = true
     telaCtrl.hidden = false
     requestAnimationFrame(dimensionarPad)
@@ -143,6 +154,36 @@ function atualizarCabecalho() {
   el('sinuca-bih').classList.toggle('on', mostrarBih)
   botaoPos.hidden = !mostrarBih
   if (!mostrarBih) { modoPosicionar = false; botaoPos.classList.remove('on') }
+}
+
+// ------------------------------------------------------------- tela de modo
+el('modos').addEventListener('click', (e) => {
+  const b = e.target.closest('[data-modo]')
+  if (!b) return
+  modo = b.dataset.modo
+  vibrar(10)
+  if (modo === 'solo') {
+    // Mostra a dificuldade e só segue quando o jogador escolher o nível.
+    el('grupo-dificuldade').hidden = false
+    return
+  }
+  confirmarModo()
+})
+
+el('dificuldades').addEventListener('click', (e) => {
+  const b = e.target.closest('[data-dif]')
+  if (!b) return
+  dificuldade = b.dataset.dif
+  selecionar(el('dificuldades'), 'dif', dificuldade)
+  vibrar(10)
+  confirmarModo()
+})
+
+function confirmarModo() {
+  ultimoModo = serializeMode(modo, dificuldade)
+  enviar(ultimoModo)
+  telaModo.hidden = true
+  telaPrep.hidden = false
 }
 
 // ---------------------------------------------------------- tela de aparência
@@ -245,21 +286,132 @@ pad.addEventListener('pointerdown', (e) => {
 pad.addEventListener('pointermove', (e) => {
   if (!arrastando) return
   atual = posLocal(e)
+  const { angle, power } = calc()
+  mostrarForca(power)
   const agora = performance.now()
   if (agora - ultimoEnvio > 40) {
     ultimoEnvio = agora
-    const { angle, power } = calc()
-    enviar(serializeAim(angle, power, meuId))
+    enviar(serializeAim(angle, power, meuId, efeito))
   }
   desenharPad()
 })
 function soltar() {
   if (!arrastando) return
   arrastando = false
+  pararTremor()
   const { angle, power } = calc()
-  if (power > 0.06) { enviar(serializeShoot(angle, power, meuId)); vibrar(24) }
+  if (power > 0.06) {
+    enviar(serializeShoot(angle, power, meuId, efeito))
+    vibrar(Math.round(14 + power * 46))   // o baque da tacada, na medida da força
+  }
   inicio = atual = null
+  mostrarForca(0)
   desenharPad()
+}
+
+// ------------------------------------------------------------ efeito (spin)
+// A bolinha branca ao lado do pad: onde você toca é onde o taco bate. Fora do
+// centro, a branca sai girando — para os lados faz curva; em cima segue depois
+// do toque; embaixo volta (puxa). O ponto vai junto no aim/shoot como -1..1.
+const padEfeito = el('padEfeito')
+const ctxEf = padEfeito.getContext('2d')
+let efeito = { x: 0, y: 0 }
+
+function desenharEfeito() {
+  const w = padEfeito.width
+  const h = padEfeito.height
+  const cx = w / 2
+  const cy = h / 2
+  const raio = Math.min(w, h) / 2 - 4
+
+  ctxEf.clearRect(0, 0, w, h)
+
+  // bola branca
+  ctxEf.beginPath()
+  ctxEf.arc(cx, cy, raio, 0, Math.PI * 2)
+  const g = ctxEf.createRadialGradient(cx - raio * 0.3, cy - raio * 0.35, raio * 0.1, cx, cy, raio)
+  g.addColorStop(0, '#ffffff')
+  g.addColorStop(1, '#cfcabc')
+  ctxEf.fillStyle = g
+  ctxEf.fill()
+
+  // cruz de referência
+  ctxEf.strokeStyle = 'rgba(0,0,0,.16)'
+  ctxEf.lineWidth = 1
+  ctxEf.beginPath()
+  ctxEf.moveTo(cx - raio, cy); ctxEf.lineTo(cx + raio, cy)
+  ctxEf.moveTo(cx, cy - raio); ctxEf.lineTo(cx, cy + raio)
+  ctxEf.stroke()
+
+  // ponto do taco
+  const px = cx + efeito.x * raio * 0.72
+  const py = cy + efeito.y * raio * 0.72
+  ctxEf.beginPath()
+  ctxEf.arc(px, py, raio * 0.2, 0, Math.PI * 2)
+  ctxEf.fillStyle = '#6E29F6'
+  ctxEf.fill()
+  ctxEf.strokeStyle = '#fff'
+  ctxEf.lineWidth = 2
+  ctxEf.stroke()
+}
+
+function definirEfeito(clientX, clientY) {
+  const r = padEfeito.getBoundingClientRect()
+  const raio = Math.min(r.width, r.height) / 2
+  let nx = (clientX - (r.left + r.width / 2)) / (raio * 0.86)
+  let ny = (clientY - (r.top + r.height / 2)) / (raio * 0.86)
+  const d = Math.hypot(nx, ny)
+  if (d > 1) { nx /= d; ny /= d }      // não deixa sair da bola
+  efeito = { x: Number(nx.toFixed(2)), y: Number(ny.toFixed(2)) }
+  desenharEfeito()
+  vibrar(8)
+}
+
+padEfeito.addEventListener('pointerdown', (e) => {
+  e.preventDefault()
+  if (padEfeito.setPointerCapture) { try { padEfeito.setPointerCapture(e.pointerId) } catch { /* ignora */ } }
+  definirEfeito(e.clientX, e.clientY)
+})
+padEfeito.addEventListener('pointermove', (e) => {
+  if (e.buttons === 0 && e.pointerType === 'mouse') return
+  if (e.pressure === 0 && e.pointerType !== 'mouse') return
+  definirEfeito(e.clientX, e.clientY)
+})
+el('efeitoCentro').addEventListener('click', () => {
+  efeito = { x: 0, y: 0 }
+  desenharEfeito()
+  vibrar(10)
+})
+desenharEfeito()
+
+// ---------------------------------------------------- medidor de força + tremor
+// Quanto mais o taco é puxado, mais cheia (e mais quente) fica a barra; passando
+// de 60% o celular começa a tremer em pulsos cada vez mais próximos, como um
+// taco tensionado. Em aparelhos sem `navigator.vibrate` (iPhone) fica só o visual.
+let tremor = null
+let forcaAtual = 0
+
+function mostrarForca(p) {
+  forcaAtual = p
+  const pct = Math.round(p * 100)
+  forcaPreenche.style.width = `${pct}%`
+  forcaTexto.textContent = `Força ${pct}%`
+  forcaBarra.classList.toggle('maxima', p >= 0.9)
+  if (p >= 0.6) iniciarTremor(); else pararTremor()
+}
+
+function iniciarTremor() {
+  if (tremor) return
+  tremor = setInterval(() => {
+    // 0.6 → pulsos curtos e espaçados; 1.0 → pulsos longos e seguidos
+    vibrar(Math.round(6 + (forcaAtual - 0.6) * 55))
+  }, 130)
+}
+
+function pararTremor() {
+  if (!tremor) return
+  clearInterval(tremor)
+  tremor = null
 }
 pad.addEventListener('pointerup', soltar)
 pad.addEventListener('pointercancel', soltar)
@@ -351,9 +503,10 @@ document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'visible' && trava === null) manterTelaAcesa()
 })
 
-// Já entrou pelo lobby como Jogador 2? Vai direto ao pad, sem passar pela
-// aparência (a mesa quem escolhe é o Jogador 1).
+// Jogador 2 entra direto no pad (quem escolhe modo e mesa é o Jogador 1);
+// o Jogador 1 começa pela escolha do modo.
 if (meuPlayer === 2) irParaPad()
+else { telaModo.hidden = false; telaPrep.hidden = true }
 atualizarCabecalho()
 
 connect()
