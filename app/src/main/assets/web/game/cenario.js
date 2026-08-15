@@ -85,24 +85,25 @@ export function criarCenario(scene, periodo = 'dia') {
   scene.add(ambiente)
 
   // ------------------------------------------------------------------- pista
-  const matAsfalto = new THREE.MeshStandardMaterial({ color: 0x4e5158, roughness: 0.95, metalness: 0 })
+  const matAsfalto = new THREE.MeshLambertMaterial({ color: 0x4e5158 })
   const pista = new THREE.Mesh(
     registrarGeo(new THREE.PlaneGeometry(LARGURA_PISTA, COMPRIMENTO_PISTA)), matAsfalto,
   )
   pista.rotation.x = -Math.PI / 2
   pista.position.z = -COMPRIMENTO_PISTA / 2 + 40
+  pista.frustumCulled = false   // plano enorme: nunca deve ser descartado
   scene.add(pista)
 
-  const matChao = new THREE.MeshStandardMaterial({ color: 0x4f7a3f, roughness: 1, metalness: 0 })
+  const matChao = new THREE.MeshLambertMaterial({ color: 0x4f7a3f })
   const chao = new THREE.Mesh(
     registrarGeo(new THREE.PlaneGeometry(240, COMPRIMENTO_PISTA)), matChao,
   )
   chao.rotation.x = -Math.PI / 2
-  chao.position.set(0, -0.06, pista.position.z)
+  chao.position.set(0, -0.6, pista.position.z)   // longe da pista: evita z-fighting na TV
   scene.add(chao)
 
   // bordas contínuas (não precisam rolar: são retas infinitas na prática)
-  const matFaixa = new THREE.MeshStandardMaterial({ color: 0xf2f2e8, roughness: 0.7, metalness: 0 })
+  const matFaixa = new THREE.MeshLambertMaterial({ color: 0xf2f2e8 })
   const geoBorda = registrarGeo(new THREE.BoxGeometry(0.22, 0.02, COMPRIMENTO_PISTA))
   const bordas = []
   for (const lado of [-1, 1]) {

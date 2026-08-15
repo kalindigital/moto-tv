@@ -90,17 +90,44 @@ function normalizar(raiz, alvo, eixo) {
   }
 }
 
-/** Materiais do GLTF vêm com doubleSided; o corte de face economiza fill rate. */
+/**
+ * Materiais do GLTF vêm com doubleSided; o corte de face economiza fill rate.
+ * Também trocamos PBR (MeshStandard) por Lambert: os modelos da Kenney são
+ * coloridos por atlas, não usam metalness/roughness de verdade, e o cálculo de
+ * iluminação física por pixel era caro demais para a GPU da TV. Cache por
+ * material de origem para não recriar (nem quebrar o compartilhamento).
+ */
+const _lambertCache = new Map()
+
+function paraLambert(m) {
+  if (!m || !m.isMeshStandardMaterial) return m
+  if (_lambertCache.has(m)) return _lambertCache.get(m)
+  const barato = new THREE.MeshLambertMaterial({
+    color: m.color,
+    map: m.map || null,
+    emissive: m.emissive || 0x000000,
+    emissiveMap: m.emissiveMap || null,
+    emissiveIntensity: m.emissiveIntensity ?? 1,
+    transparent: m.transparent,
+    opacity: m.opacity,
+    vertexColors: m.vertexColors,
+    side: THREE.FrontSide,
+  })
+  _lambertCache.set(m, barato)
+  return barato
+}
+
 function otimizarMateriais(raiz) {
   raiz.traverse((n) => {
     if (!n.isMesh) return
     n.castShadow = false
     n.receiveShadow = false
     n.frustumCulled = true
-    const mats = Array.isArray(n.material) ? n.material : [n.material]
-    for (const m of mats) {
-      if (!m) continue
-      m.side = THREE.FrontSide
+    if (Array.isArray(n.material)) {
+      n.material = n.material.map((m) => { const b = paraLambert(m); if (b) b.side = THREE.FrontSide; return b })
+    } else if (n.material) {
+      n.material = paraLambert(n.material)
+      n.material.side = THREE.FrontSide
     }
   })
 }

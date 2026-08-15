@@ -52,10 +52,9 @@ const camera = new THREE.PerspectiveCamera(70, innerWidth / innerHeight, 0.1, 26
 const renderer = new THREE.WebGLRenderer({
   antialias: false,
   powerPreference: 'high-performance',
-  precision: 'mediump',
 })
 renderer.shadowMap.enabled = false
-let escalaRender = Number(localStorage.getItem('moto-tv.escala')) || 0.75
+let escalaRender = Number(localStorage.getItem('moto-tv.escala.v2')) || 0.9
 
 function dimensionar() {
   camera.aspect = innerWidth / innerHeight
@@ -641,8 +640,8 @@ function medirFps(agora) {
   if (fpsAtual < 45 && escalaRender > 0.5) {
     segurandoBaixo += decorrido
     if (segurandoBaixo >= 2000) {
-      escalaRender = Math.max(0.5, Math.round((escalaRender - 0.15) * 100) / 100)
-      localStorage.setItem('moto-tv.escala', String(escalaRender))
+      escalaRender = Math.max(0.6, Math.round((escalaRender - 0.1) * 100) / 100)
+      localStorage.setItem('moto-tv.escala.v2', String(escalaRender))
       dimensionar()
       segurandoBaixo = 0
     }

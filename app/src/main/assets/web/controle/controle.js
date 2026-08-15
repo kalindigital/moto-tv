@@ -62,7 +62,7 @@ function mostrarAviso(texto) {
 
 // ---------- inclinação → direção ----------
 function onOrientation(e) {
-  const gamma = Number.isFinite(e.gamma) ? e.gamma : 0
+  const gamma = (Number.isFinite(e.gamma) ? e.gamma : 0) * inversao
   ultimoGamma = gamma
   const steer = gammaToSteer(gamma, { neutral, maxAngle: 35, deadzone: 3 })
   fill.style.width = `${(steer + 1) * 50}%`
@@ -193,6 +193,42 @@ document.getElementById('reiniciar').addEventListener('click', () => {
 
 document.getElementById('qr').addEventListener('click', () => {
   enviar(serializeAction('qr'))
+})
+
+// Direção invertida: o sinal do `gamma` depende de para que lado o celular foi
+// girado no modo paisagem. Deduzimos pela orientação da tela e ainda deixamos o
+// botão para o usuário corrigir na hora, sem depender de nova versão.
+const botaoInverter = document.getElementById('inverter')
+
+function sinalPelaOrientacao() {
+  const angulo = screen.orientation?.angle ?? window.orientation ?? 0
+  // 90° e 0° apontam num sentido; -90°/270° e 180°, no oposto.
+  return angulo === 270 || angulo === -90 || angulo === 180 ? -1 : 1
+}
+
+const salvo = localStorage.getItem('moto-tv.inversao')
+let inversao = salvo !== null ? Number(salvo) : sinalPelaOrientacao()
+
+function mostrarInversao() {
+  botaoInverter.dataset.ativo = inversao === -1 ? 'true' : 'false'
+  botaoInverter.textContent = inversao === -1 ? 'Direção invertida' : 'Inverter direção'
+}
+mostrarInversao()
+
+botaoInverter.addEventListener('click', () => {
+  inversao = -inversao
+  localStorage.setItem('moto-tv.inversao', String(inversao))
+  neutral = 0            // a calibração anterior valia para o outro sentido
+  mostrarInversao()
+  vibrar(20)
+})
+
+// Girar o celular troca o sentido — só vale enquanto o usuário não escolher na mão.
+addEventListener('orientationchange', () => {
+  if (localStorage.getItem('moto-tv.inversao') === null) {
+    inversao = sinalPelaOrientacao()
+    mostrarInversao()
+  }
 })
 
 // Segurar o celular inclinado não conta como toque: sem isso a tela apaga no meio
