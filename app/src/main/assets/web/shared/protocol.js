@@ -7,8 +7,13 @@ export function serializeAction(name) {
 export function serializeThrottle(ativo) {
   return JSON.stringify({ t: 'throttle', v: ativo })
 }
-export function serializeSetup(periodo) {
-  return JSON.stringify({ t: 'setup', periodo })
+// Motos disponíveis: 'sk' (Esportiva), 'kawasaki' (Ninja), 'classica' (procedural).
+const MOTOS_VALIDAS = ['sk', 'kawasaki', 'classica']
+
+export function serializeSetup(periodo, moto) {
+  // A moto é opcional: sem ela (ou com id desconhecido) mantemos o formato antigo.
+  if (!MOTOS_VALIDAS.includes(moto)) return JSON.stringify({ t: 'setup', periodo })
+  return JSON.stringify({ t: 'setup', periodo, moto })
 }
 export function parseMessage(str) {
   let m
@@ -24,7 +29,9 @@ export function parseMessage(str) {
   }
   // Só 'dia' e 'noite' são períodos válidos; o resto cai em unknown.
   if (m && m.t === 'setup' && (m.periodo === 'dia' || m.periodo === 'noite')) {
-    return { type: 'setup', periodo: m.periodo }
+    // A moto é opcional: ausente ou desconhecida vira null (o jogo usa a padrão).
+    const moto = MOTOS_VALIDAS.includes(m.moto) ? m.moto : null
+    return { type: 'setup', periodo: m.periodo, moto }
   }
   return { type: 'unknown' }
 }
