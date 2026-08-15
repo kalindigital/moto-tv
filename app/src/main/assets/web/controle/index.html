@@ -2,29 +2,203 @@
 <html lang="pt-br">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+  <meta name="theme-color" content="#0b0b12">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <title>Controle — Moto TV</title>
   <style>
-    html,body{margin:0;height:100%;background:#0b0b12;color:#fff;font-family:system-ui,sans-serif;
-      display:flex;flex-direction:column;align-items:center;justify-content:center;gap:20px;overflow:hidden}
-    button{font-size:20px;padding:16px 28px;border:0;border-radius:14px;background:#6E29F6;color:#fff}
-    button:active{filter:brightness(.85)}
-    #status{position:fixed;top:10px;right:14px;font-size:14px}
-    .dot{display:inline-block;width:10px;height:10px;border-radius:50%;background:#e33;margin-right:6px}
-    .dot.on{background:#3c3}
-    #bar{width:70vw;height:16px;background:#222;border-radius:8px;overflow:hidden}
-    #fill{height:100%;width:50%;background:#6E29F6;transition:width .05s linear}
-    .row{display:flex;gap:14px}
+    :root{
+      --acento:#6E29F6;
+      --acento-claro:#9a6bff;
+      --fundo:#0b0b12;
+      --superficie:#171724;
+      --superficie-alta:#22223a;
+      --borda:#2e2e46;
+      --texto:#fff;
+      --texto-fraco:#a6a6c0;
+      --ok:#3ccb5a;
+      --erro:#e3474f;
+    }
+    *{box-sizing:border-box}
+    html,body{
+      margin:0;height:100%;width:100%;
+      background:var(--fundo);color:var(--texto);
+      font-family:system-ui,-apple-system,"Segoe UI",sans-serif;
+      overflow:hidden;overscroll-behavior:none;
+      touch-action:manipulation;
+      -webkit-user-select:none;user-select:none;
+      -webkit-touch-callout:none;
+      -webkit-tap-highlight-color:transparent;
+    }
+    [hidden]{display:none !important}
+    button{font-family:inherit;color:inherit;border:0;background:none;cursor:pointer}
+
+    /* ---------- telas ---------- */
+    .tela{
+      position:absolute;inset:0;
+      display:flex;
+      padding:calc(12px + env(safe-area-inset-top)) calc(12px + env(safe-area-inset-right))
+              calc(12px + env(safe-area-inset-bottom)) calc(12px + env(safe-area-inset-left));
+      gap:12px;
+    }
+
+    /* ---------- indicador de conexão ---------- */
+    #status{
+      position:fixed;z-index:10;
+      top:calc(6px + env(safe-area-inset-top));right:calc(10px + env(safe-area-inset-right));
+      font-size:12px;color:var(--texto-fraco);display:flex;align-items:center;gap:6px;
+      /* fica por cima do acelerador em paisagem: pílula para continuar legível */
+      background:rgba(11,11,18,.72);border-radius:999px;padding:4px 10px;pointer-events:none;
+    }
+    .dot{width:9px;height:9px;border-radius:50%;background:var(--erro);box-shadow:0 0 8px var(--erro)}
+    .dot.on{background:var(--ok);box-shadow:0 0 8px var(--ok)}
+
+    /* ---------- tela 1: preparação ---------- */
+    #tela-preparacao{flex-direction:column;align-items:center;justify-content:center;overflow-y:auto}
+    #tela-preparacao h1{
+      margin:0;font-size:clamp(24px,7vw,40px);letter-spacing:.08em;text-transform:uppercase;
+      background:linear-gradient(90deg,var(--acento-claro),#fff);
+      -webkit-background-clip:text;background-clip:text;color:transparent;
+    }
+    .grupo{width:100%;max-width:640px}
+    .rotulo{margin:0 0 6px;font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--texto-fraco);font-weight:600}
+    .opcoes{display:flex;gap:10px}
+    .opcao{
+      flex:1;min-height:64px;padding:10px 8px;border-radius:14px;
+      background:var(--superficie);border:2px solid var(--borda);
+      display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;
+      transition:border-color .12s,background .12s,transform .08s;
+    }
+    .opcao .nome{font-size:16px;font-weight:700}
+    .opcao .desc{font-size:11px;color:var(--texto-fraco)}
+    .opcao:active{transform:scale(.97)}
+    .opcao[aria-pressed="true"]{
+      border-color:var(--acento);background:var(--superficie-alta);
+      box-shadow:0 0 0 3px rgba(110,41,246,.22);
+    }
+    .opcao[aria-pressed="true"] .desc{color:var(--acento-claro)}
+    #comecar{
+      width:100%;max-width:640px;min-height:64px;border-radius:16px;
+      background:var(--acento);font-size:22px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;
+      box-shadow:0 6px 20px rgba(110,41,246,.4);
+    }
+    #comecar:active{filter:brightness(.85);transform:translateY(1px)}
+    .dica{margin:0;font-size:12px;color:var(--texto-fraco);text-align:center}
+    #aviso{
+      margin:0;max-width:640px;font-size:13px;line-height:1.35;text-align:center;
+      color:#ffd27d;background:rgba(255,210,125,.1);border:1px solid rgba(255,210,125,.35);
+      border-radius:10px;padding:8px 10px;
+    }
+
+    /* ---------- tela 2: controle ---------- */
+    #tela-controle{flex-direction:column}
+    .lateral{display:flex;flex-direction:column;gap:10px;flex:0 0 auto}
+    #bar{
+      width:100%;height:14px;background:var(--superficie);border:1px solid var(--borda);
+      border-radius:8px;overflow:hidden;position:relative;
+    }
+    #bar::after{content:"";position:absolute;left:50%;top:0;bottom:0;width:1px;background:var(--borda)}
+    #fill{height:100%;width:50%;background:linear-gradient(90deg,var(--acento),var(--acento-claro));transition:width .05s linear}
+    .acoes{display:flex;gap:8px;flex-wrap:wrap}
+    .acoes button{
+      flex:1 1 0;min-width:88px;min-height:52px;padding:8px 6px;border-radius:12px;
+      background:var(--superficie);border:1px solid var(--borda);
+      font-size:14px;font-weight:600;
+    }
+    .acoes button:active{background:var(--superficie-alta)}
+    #pausar[data-pausado="true"]{border-color:var(--acento);color:var(--acento-claro)}
+    #acelerar{
+      flex:1 1 auto;min-height:38vh;width:100%;
+      border-radius:22px;border:2px solid var(--acento);
+      background:radial-gradient(120% 120% at 50% 0%,rgba(110,41,246,.35),rgba(110,41,246,.12));
+      font-size:clamp(28px,8vw,64px);font-weight:900;letter-spacing:.1em;
+      display:flex;align-items:center;justify-content:center;
+      touch-action:none;
+      transition:background .08s,transform .08s,box-shadow .08s;
+    }
+    #acelerar.ativo{
+      background:var(--acento);
+      box-shadow:0 0 40px rgba(110,41,246,.65),inset 0 0 30px rgba(255,255,255,.18);
+      transform:scale(.99);
+    }
+
+    /* ---------- retrato ---------- */
+    @media (orientation:portrait){
+      /* deixa a barra de direção livre do indicador de conexão */
+      #tela-controle{padding-top:calc(34px + env(safe-area-inset-top))}
+    }
+
+    /* ---------- paisagem ---------- */
+    @media (orientation:landscape){
+      #tela-preparacao{gap:10px;justify-content:center}
+      #tela-preparacao h1{font-size:clamp(20px,5vh,32px)}
+      .opcao{min-height:56px}
+      #comecar{min-height:56px;font-size:20px}
+      #tela-controle{flex-direction:row;align-items:stretch}
+      .lateral{flex:0 0 34%;max-width:300px;justify-content:space-between}
+      .acoes{flex-direction:column;flex:1;justify-content:flex-end}
+      .acoes button{flex:0 0 auto}
+      #acelerar{min-height:0;height:100%}
+    }
   </style>
 </head>
 <body>
-  <div id="status"><span class="dot" id="dot"></span><span id="conn">desconectado</span></div>
-  <button id="start">Ativar controle</button>
-  <div id="bar"><div id="fill"></div></div>
-  <div class="row">
-    <button id="calib">Calibrar</button>
-    <button id="restart">Reiniciar</button>
+  <div id="status" role="status" aria-live="polite">
+    <span class="dot" id="dot"></span><span id="conn">desconectado</span>
   </div>
+
+  <!-- Tela 1 — antes da corrida -->
+  <main id="tela-preparacao" class="tela">
+    <h1>Moto TV</h1>
+
+    <div class="grupo">
+      <h2 class="rotulo">Escolha a moto</h2>
+      <div class="opcoes" id="motos" role="group" aria-label="Escolha a moto">
+        <button type="button" class="opcao" data-moto="sk" aria-pressed="true">
+          <span class="nome">Esportiva</span><span class="desc">ágil</span>
+        </button>
+        <button type="button" class="opcao" data-moto="kawasaki" aria-pressed="false">
+          <span class="nome">Ninja</span><span class="desc">veloz</span>
+        </button>
+        <button type="button" class="opcao" data-moto="classica" aria-pressed="false">
+          <span class="nome">Clássica</span><span class="desc">equilibrada</span>
+        </button>
+      </div>
+    </div>
+
+    <div class="grupo">
+      <h2 class="rotulo">Período</h2>
+      <div class="opcoes" id="periodos" role="group" aria-label="Escolha o período">
+        <button type="button" class="opcao" data-periodo="dia" aria-pressed="true">
+          <span class="nome">Dia</span><span class="desc">céu aberto</span>
+        </button>
+        <button type="button" class="opcao" data-periodo="noite" aria-pressed="false">
+          <span class="nome">Noite</span><span class="desc">faróis ligados</span>
+        </button>
+      </div>
+    </div>
+
+    <p id="aviso" hidden></p>
+    <button type="button" id="comecar">Começar</button>
+    <p class="dica">Segure o celular deitado e incline para virar.</p>
+  </main>
+
+  <!-- Tela 2 — durante a corrida -->
+  <main id="tela-controle" class="tela" hidden>
+    <div class="lateral">
+      <div id="bar" role="img" aria-label="Direção"><div id="fill"></div></div>
+      <div class="acoes">
+        <button type="button" id="pausar" data-pausado="false">Pausar</button>
+        <button type="button" id="calibrar">Calibrar</button>
+        <button type="button" id="reiniciar">Reiniciar</button>
+        <button type="button" id="qr">Mostrar QR</button>
+      </div>
+    </div>
+    <button type="button" id="acelerar">ACELERAR</button>
+  </main>
+
   <script type="module" src="./controle.js"></script>
 </body>
 </html>
