@@ -39,3 +39,20 @@
 - [x] Tela de fim de jogo com pontuação, recorde e top 10 em localStorage
 - [x] QR sob demanda (ação `qr` / tecla Q), fora da tela de fim de jogo
 - [x] Validar em runtime no emulador (dia, noite, pausa, fim de jogo, QR)
+
+## Sinuca — app multijogo (onda 3)
+Plano em `docs/superpowers/specs/2026-08-15-sinuca-modo-multijogo-design.md`.
+- [x] Menu inicial na TV (`/menu`) escolhendo Moto ou Sinuca; `/` passa a redirecionar ao menu (RouteResolver + teste)
+- [x] Física 2D pura e testada (`shared/billiards.js`: colisão elástica, tabela, atrito, caçapa, repouso)
+- [x] Regras 8-ball puras e testadas (`shared/pool-rules.js`: turnos, grupos, faltas, bola na mão, vitória)
+- [x] Protocolo da sinuca (`shared/cue-protocol.js`: pick/aim/shoot/place/turn/sinucaSetup/join/assign) com testes
+- [x] Jogo Canvas 2D top-view (`sinuca/`: mesa, bolas numeradas, taco, HUD, telas, som procedural)
+- [x] Controle "estilingue" no celular (arrasta e solta) + seletor de jogo + botão Sair
+- [x] Aparência escolhível no celular (taco e mesa: verde/azul/vinho)
+- [x] Animação da bola caindo na caçapa (fade + deslize até o buraco)
+- [x] Modo 2 celulares: cada jogador escaneia e vira Jogador 1/2; trava por vez (`join`/`assign`)
+- [x] Física calibrada (rola e desacelera de forma fluida)
+- [x] Testes Vitest (billiards 15, pool-rules 17, cue-protocol 28) + JUnit segue verde (RouteResolver 7)
+- [x] Build `assembleDebug` e instalação na TV real via ADB (`installDebug`/`adb install`)
+- [x] Validado na TV: menu, render da mesa, quebra e detecção de falta
+- [ ] Validar na TV: 2 celulares (atribuição 1/2, trava por vez), animação da caçapa, tela de aparência sem corte

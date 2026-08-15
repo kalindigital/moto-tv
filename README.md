@@ -1,10 +1,13 @@
 # Moto TV
 
-Jogo de moto em 3D que roda numa **Android TV** e é controlado por um **iPhone** pela rede WiFi local. A TV mostra o jogo (Three.js) em tela cheia junto com um **QR code**; o celular abre a página de controle no navegador, usa o **acelerômetro/giroscópio** para virar a moto e conversa com a TV por WebSocket. Sem app no celular, sem nuvem: tudo acontece na rede local. Por isso, **qualquer dispositivo na mesma rede WiFi** pode abrir o jogo e enviar comandos de virar/reiniciar — não há autenticação, e isso é intencional para uma rede local de confiança.
+App de jogos para **Android TV** controlados pelo **celular** na rede WiFi local. A TV mostra um **menu** (Moto ou Sinuca) com um **QR code**; o celular abre a página de controle no navegador e conversa com a TV por WebSocket. Sem app no celular, sem nuvem: tudo acontece na rede local. Por isso, **qualquer dispositivo na mesma rede WiFi** pode entrar e enviar comandos — não há autenticação, e isso é intencional para uma rede local de confiança.
+
+- **Moto** — corrida 3D (Three.js); o celular vira a moto pelo **acelerômetro/giroscópio**.
+- **Sinuca** — 8-ball top view (Canvas 2D); o celular é um **estilingue** (arrasta e solta para tacar). Dá para jogar com **dois celulares**, um por jogador. Detalhes em [`docs/superpowers/specs/2026-08-15-sinuca-modo-multijogo-design.md`](docs/superpowers/specs/2026-08-15-sinuca-modo-multijogo-design.md).
 
 ## Arquitetura em uma frase
 
-O app Android TV embute um servidor **NanoHTTPD (HTTPS na porta 8444)** que serve o jogo (`/`), a página de controle (`/controle`), a config (`/config`), o estado da atualização (`/update`) e um **relay WebSocket** (`/ws`). A WebView da TV carrega o jogo; o iPhone carrega `/controle`; as inclinações do celular chegam à TV pelo `/ws`.
+O app Android TV embute um servidor **NanoHTTPD (HTTPS na porta 8444)** que serve o menu (`/` → `/menu`), os jogos (`/game` moto, `/sinuca`), a página de controle (`/controle`), a config (`/config`), o estado da atualização (`/update`) e um **relay WebSocket** (`/ws`). A WebView da TV carrega o menu e, ao escolher, o jogo; o celular carrega `/controle`; os comandos do celular chegam à TV pelo `/ws` (e a TV devolve, por exemplo, de quem é a vez na sinuca).
 
 ## Pré-requisitos
 

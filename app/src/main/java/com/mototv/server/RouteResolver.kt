@@ -38,7 +38,7 @@ object RouteResolver {
     fun resolve(path: String): Route {
         if (path.contains("..")) return Route.NotFound
         return when (val rel = path.trimStart('/')) {
-            "" -> Route.Redirect("/game/index.html")
+            "" -> Route.Redirect("/menu/index.html")
             "controle", "controle/" -> Route.Redirect("/controle/index.html")
             "config" -> Route.Config
             "update" -> Route.Update

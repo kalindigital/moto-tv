@@ -130,17 +130,66 @@
       #tela-controle{padding-top:calc(34px + env(safe-area-inset-top))}
     }
 
+    /* ---------- seletor de jogo ---------- */
+    #tela-jogo{flex-direction:column;align-items:center;justify-content:center;gap:16px}
+    #tela-jogo h1{
+      margin:0;font-size:clamp(24px,7vw,40px);letter-spacing:.08em;text-transform:uppercase;
+      background:linear-gradient(90deg,var(--acento-claro),#fff);
+      -webkit-background-clip:text;background-clip:text;color:transparent;
+    }
+    .jogos{display:flex;flex-direction:column;gap:14px;width:100%;max-width:520px}
+    .jogo{min-height:96px;border-radius:18px;background:var(--superficie);border:2px solid var(--borda);
+      display:flex;align-items:center;gap:16px;padding:16px 20px;transition:border-color .12s,transform .08s}
+    .jogo:active{transform:scale(.98);border-color:var(--acento)}
+    .jogo .ic{font-size:44px;line-height:1}
+    .jogo .tx{text-align:left}
+    .jogo .tx .n{display:block;font-size:22px;font-weight:800}
+    .jogo .tx .d{display:block;font-size:13px;color:var(--texto-fraco)}
+
+    /* ---------- sinuca: aparência (taco/mesa) ---------- */
+    #tela-sinuca-prep{flex-direction:column;align-items:center;justify-content:center;overflow-y:auto}
+    #tela-sinuca-prep h1{
+      margin:0;font-size:clamp(24px,7vw,40px);letter-spacing:.08em;text-transform:uppercase;
+      background:linear-gradient(90deg,var(--acento-claro),#fff);
+      -webkit-background-clip:text;background-clip:text;color:transparent;
+    }
+    #sinuca-comecar{
+      width:100%;max-width:640px;min-height:64px;border-radius:16px;
+      background:var(--acento);font-size:22px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;
+      box-shadow:0 6px 20px rgba(110,41,246,.4);
+    }
+    #sinuca-comecar:active{filter:brightness(.85);transform:translateY(1px)}
+
+    /* ---------- controle da sinuca ---------- */
+    #tela-sinuca{flex-direction:column;gap:10px}
+    #sinuca-cab{display:flex;flex-direction:column;gap:2px;flex:0 0 auto;text-align:center}
+    #sinuca-vez{font-size:22px;font-weight:900;letter-spacing:.04em}
+    #sinuca-sub{font-size:13px;color:var(--texto-fraco)}
+    #sinuca-bih{display:none;margin:2px auto 0;font-size:12px;font-weight:800;color:#111;
+      background:#ffd257;padding:3px 12px;border-radius:999px}
+    #sinuca-bih.on{display:inline-block}
+    #padSinuca{flex:1 1 auto;width:100%;min-height:0;border-radius:20px;border:2px solid var(--acento);
+      background:radial-gradient(130% 130% at 50% 40%,rgba(110,41,246,.20),rgba(110,41,246,.06));
+      touch-action:none;display:block}
+    .sinuca-acoes{display:flex;gap:8px;flex:0 0 auto}
+    .sinuca-acoes button{flex:1;min-height:48px;border-radius:12px;background:var(--superficie);
+      border:1px solid var(--borda);font-size:14px;font-weight:600}
+    .sinuca-acoes button:active{background:var(--superficie-alta)}
+    #sinuca-posicionar.on{border-color:var(--acento);color:var(--acento-claro)}
+
     /* ---------- paisagem ---------- */
     @media (orientation:landscape){
-      #tela-preparacao{gap:10px;justify-content:center}
-      #tela-preparacao h1{font-size:clamp(20px,5vh,32px)}
+      #tela-preparacao,#tela-sinuca-prep{gap:10px;justify-content:center}
+      #tela-preparacao h1,#tela-sinuca-prep h1{font-size:clamp(20px,5vh,32px)}
       .opcao{min-height:56px}
-      #comecar{min-height:56px;font-size:20px}
+      #comecar,#sinuca-comecar{min-height:56px;font-size:20px}
       #tela-controle{flex-direction:row;align-items:stretch}
       .lateral{flex:0 0 34%;max-width:300px;justify-content:space-between}
       .acoes{flex-direction:column;flex:1;justify-content:flex-end}
       .acoes button{flex:0 0 auto}
       #acelerar{min-height:0;height:100%}
+      .jogos{flex-direction:row}
+      #tela-sinuca{flex-direction:column}
     }
   </style>
 </head>
@@ -149,8 +198,24 @@
     <span class="dot" id="dot"></span><span id="conn">desconectado</span>
   </div>
 
-  <!-- Tela 1 — antes da corrida -->
-  <main id="tela-preparacao" class="tela">
+  <!-- Tela 0 — escolha do jogo -->
+  <main id="tela-jogo" class="tela">
+    <h1>Escolha o jogo</h1>
+    <div class="jogos" id="jogos">
+      <button type="button" class="jogo" data-game="moto">
+        <span class="ic">🏍️</span>
+        <span class="tx"><span class="n">Moto</span><span class="d">Corrida 3D · incline o celular para virar</span></span>
+      </button>
+      <button type="button" class="jogo" data-game="sinuca">
+        <span class="ic">🎱</span>
+        <span class="tx"><span class="n">Sinuca</span><span class="d">8-ball · 2 jogadores · arraste e solte para tacar</span></span>
+      </button>
+    </div>
+    <p class="dica">A TV vai abrir o jogo que você escolher aqui.</p>
+  </main>
+
+  <!-- MOTO — Tela 1: antes da corrida -->
+  <main id="tela-preparacao" class="tela" hidden>
     <h1>Moto TV</h1>
 
     <div class="grupo">
@@ -195,9 +260,61 @@
         <button type="button" id="reiniciar">Reiniciar</button>
         <button type="button" id="qr">Mostrar QR</button>
         <button type="button" id="inverter">Inverter direção</button>
+        <button type="button" id="sair">⇤ Sair</button>
       </div>
     </div>
     <button type="button" id="acelerar">ACELERAR</button>
+  </main>
+
+  <!-- SINUCA — Tela 1: aparência (taco e mesa) -->
+  <main id="tela-sinuca-prep" class="tela" hidden>
+    <h1>Sinuca</h1>
+    <div class="grupo">
+      <h2 class="rotulo">Taco</h2>
+      <div class="opcoes" id="tacos" role="group" aria-label="Escolha o taco">
+        <button type="button" class="opcao" data-taco="classico" aria-pressed="true">
+          <span class="nome">Clássico</span><span class="desc">madeira</span>
+        </button>
+        <button type="button" class="opcao" data-taco="grafite" aria-pressed="false">
+          <span class="nome">Grafite</span><span class="desc">grafite</span>
+        </button>
+        <button type="button" class="opcao" data-taco="vermelho" aria-pressed="false">
+          <span class="nome">Vermelho</span><span class="desc">esportivo</span>
+        </button>
+      </div>
+    </div>
+    <div class="grupo">
+      <h2 class="rotulo">Mesa</h2>
+      <div class="opcoes" id="mesas" role="group" aria-label="Escolha a mesa">
+        <button type="button" class="opcao" data-mesa="verde" aria-pressed="true">
+          <span class="nome">Verde</span><span class="desc">clássica</span>
+        </button>
+        <button type="button" class="opcao" data-mesa="azul" aria-pressed="false">
+          <span class="nome">Azul</span><span class="desc">torneio</span>
+        </button>
+        <button type="button" class="opcao" data-mesa="vinho" aria-pressed="false">
+          <span class="nome">Vinho</span><span class="desc">clube</span>
+        </button>
+      </div>
+    </div>
+    <button type="button" id="sinuca-comecar">Começar</button>
+    <p class="dica">Dois jogadores no mesmo sofá — passem o celular a cada tacada.</p>
+  </main>
+
+  <!-- SINUCA — Tela 2: controle (estilingue) -->
+  <main id="tela-sinuca" class="tela" hidden>
+    <div id="sinuca-cab">
+      <div id="sinuca-vez">Jogador 1</div>
+      <div id="sinuca-sub">Mesa aberta · arraste para trás e solte para tacar</div>
+      <div id="sinuca-bih">Bola na mão</div>
+    </div>
+    <canvas id="padSinuca"></canvas>
+    <div class="sinuca-acoes">
+      <button type="button" id="sinuca-posicionar" hidden>Posicionar branca</button>
+      <button type="button" id="sinuca-reiniciar">Reiniciar</button>
+      <button type="button" id="sinuca-qr">QR</button>
+      <button type="button" id="sinuca-sair">⇤ Sair</button>
+    </div>
   </main>
 
   <script type="module" src="./controle.js"></script>

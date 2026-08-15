@@ -454,6 +454,7 @@ fetch('/config')
 // ----------------------------------------------------------------- comandos
 function comando(nome) {
   liberarAudio()
+  if (nome === 'menu') { location.href = '/menu/index.html'; return }
   if (estado === 'carregando') return
   if (nome === 'restart') { comecar(); return }
   if (nome === 'pause') { pausar(); return }

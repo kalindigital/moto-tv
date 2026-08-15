@@ -8,9 +8,10 @@ import org.junit.Test
 class RouteResolverTest {
     // A raiz e /controle redirecionam para o index dentro da pasta: os HTMLs
     // referenciam os scripts por caminho relativo e só resolvem certo lá.
-    @Test fun raiz_leva_ao_index_do_jogo() {
-        assertEquals(Route.Redirect("/game/index.html"), RouteResolver.resolve("/"))
-        assertEquals(Route.Asset("game/index.html"), RouteResolver.resolve("/game/index.html"))
+    // A raiz agora abre o MENU (escolha entre Moto e Sinuca), não o jogo direto.
+    @Test fun raiz_leva_ao_menu() {
+        assertEquals(Route.Redirect("/menu/index.html"), RouteResolver.resolve("/"))
+        assertEquals(Route.Asset("menu/index.html"), RouteResolver.resolve("/menu/index.html"))
     }
 
     @Test fun controle_leva_ao_index_do_controle() {
