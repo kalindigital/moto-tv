@@ -30,3 +30,12 @@
 ## Reformulação do jogo (onda 2)
 - [x] Protocolo com acelerador (`throttle`) e período dia/noite (`setup`)
 - [x] Módulo de pontuação (`shared/scoring.js`: pontos, placar, ranking, recorde, formatação)
+- [x] Modelos 3D dos veículos (`game/models.js`: carga dos GLB, normalização, pool de clones)
+- [x] Moto esportiva com piloto (procedural em Three.js, com farol e lanterna)
+- [x] Cenário dia/noite (`game/cenario.js`: pista, beira de estrada reciclada, postes acesos à noite)
+- [x] Som de motor sintetizado no WebAudio (`game/audio.js`)
+- [x] HUD do jogo (pontos, velocímetro, acelerador, período)
+- [x] Estados carregando/aguardando/jogando/pausado/crashed com pausa e reinício
+- [x] Tela de fim de jogo com pontuação, recorde e top 10 em localStorage
+- [x] QR sob demanda (ação `qr` / tecla Q), fora da tela de fim de jogo
+- [x] Validar em runtime no emulador (dia, noite, pausa, fim de jogo, QR)

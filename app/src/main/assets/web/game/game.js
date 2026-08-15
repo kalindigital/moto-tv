@@ -1,95 +1,343 @@
 import * as THREE from '../vendor/three.module.js'
 import { aabbOverlap } from '../shared/collision.js'
 import { parseMessage } from '../shared/protocol.js'
+import {
+  criarPlacar, registrarUltrapassagem, inserirNoRanking, ehRecorde, formatarPontos,
+} from '../shared/scoring.js'
+import { carregarModelos, criarMoto, pegarCarro, pegarCaminhao } from './models.js'
+import { criarCenario, FAIXAS, LIMITE_X } from './cenario.js'
+import { criarMotor } from './audio.js'
 
-const LANES = [-2.2, 0, 2.2]
-const MOTO = { w: 1.0, d: 2.0 }
-const CAR = { w: 1.4, d: 2.4 }
+/**
+ * Moto TV — tela do jogo.
+ *
+ * Estados: carregando -> aguardando -> jogando <-> pausado -> crashed.
+ * Entrada: WebSocket do celular (steer/throttle/setup/action) com teclado como
+ * alternativa para o controle da TV e para desenvolvimento.
+ */
 
-let state = 'aguardando'   // aguardando | jogando | crashed
-let steer = 0              // -1..1 (WebSocket ou teclado)
-let targetX = 0
-let speed = 22             // unidades/seg do "mundo" andando
+// ------------------------------------------------------------------ ajustes
+const VEL_INICIAL = 26          // unidades de mundo por segundo
+const VEL_CRUZEIRO = 34
+const VEL_TURBO = 60
+const VEL_TRAFEGO = 7           // o tráfego vem de frente: soma na velocidade relativa
+const VEL_LATERAL = 7.2
+const KMH_POR_UNIDADE = 5       // só para o velocímetro parecer de moto
+const Z_SPAWN = -110
+const Z_SUMICO = 14
+const CHAVE_RANKING = 'moto-tv.ranking'
 
-// ---- Three.js setup ----
+// ------------------------------------------------------------------- estado
+let estado = 'carregando'
+let steer = 0                   // -1..1 vindo do celular ou do teclado
+let acelerando = false
+let alvoX = 0
+let velocidade = VEL_INICIAL
+let tempoCorrida = 0
+let tempoSpawn = 0
+let placar = criarPlacar()
+let periodo = 'dia'
+let qrAberto = false
+
+// ------------------------------------------------------------------ cena 3D
 const scene = new THREE.Scene()
-scene.fog = new THREE.Fog(0x0b0b12, 30, 90)
-const camera = new THREE.PerspectiveCamera(70, innerWidth / innerHeight, 0.1, 200)
-const renderer = new THREE.WebGLRenderer({ antialias: true })
+const camera = new THREE.PerspectiveCamera(70, innerWidth / innerHeight, 0.1, 260)
+const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' })
+renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5))
 renderer.setSize(innerWidth, innerHeight)
-document.body.appendChild(renderer.domElement)
+document.getElementById('palco').appendChild(renderer.domElement)
 addEventListener('resize', () => {
   camera.aspect = innerWidth / innerHeight
   camera.updateProjectionMatrix()
   renderer.setSize(innerWidth, innerHeight)
 })
 
-scene.add(new THREE.HemisphereLight(0xffffff, 0x223344, 1.1))
+let cenario = null
+let moto = null
+const veiculos = []             // pool: nada é criado durante a partida
 
-// pista
-const road = new THREE.Mesh(
-  new THREE.PlaneGeometry(9, 400),
-  new THREE.MeshStandardMaterial({ color: 0x1a1a22 })
-)
-road.rotation.x = -Math.PI / 2
-road.position.z = -180
-scene.add(road)
+// --------------------------------------------------------------------- DOM
+const el = (id) => document.getElementById(id)
+const telas = {
+  carregando: el('telaCarregando'),
+  espera: el('telaEspera'),
+  pausa: el('telaPausa'),
+  fim: el('telaFim'),
+}
+const hud = el('hud')
+const elPontos = el('pontos')
+const elDetalhe = el('detalhe')
+const elVelocidade = el('velocidade')
+const elAcelerador = el('acelerador')
+const elBarraAcel = el('barraAcel')
+const elPeriodo = el('periodo')
+const telaQr = el('telaQr')
 
-// faixas (marcadores que "andam" para trás para dar sensação de velocidade)
-const stripes = []
-for (let i = 0; i < 40; i++) {
-  const s = new THREE.Mesh(
-    new THREE.BoxGeometry(0.2, 0.02, 2),
-    new THREE.MeshStandardMaterial({ color: 0x666677 })
-  )
-  s.position.set(0, 0.02, -i * 8)
-  scene.add(s); stripes.push(s)
+function mostrarTela(nome) {
+  for (const chave of Object.keys(telas)) telas[chave].classList.toggle('oculto', chave !== nome)
 }
 
-// moto (placeholder)
-const moto = new THREE.Mesh(
-  new THREE.BoxGeometry(MOTO.w, 1, MOTO.d),
-  new THREE.MeshStandardMaterial({ color: 0x6E29F6 })
-)
-moto.position.set(0, 0.5, 0)
-scene.add(moto)
-
-// carros (pool)
-const cars = []
-for (let i = 0; i < 6; i++) {
-  const c = new THREE.Mesh(
-    new THREE.BoxGeometry(CAR.w, 1.2, CAR.d),
-    new THREE.MeshStandardMaterial({ color: 0xdd3333 })
-  )
-  c.visible = false
-  c.userData.active = false
-  scene.add(c); cars.push(c)
+// Pool de "+1"/"+4": elementos reciclados, zero alocação durante o jogo.
+const flutuantes = []
+{
+  const caixa = el('flutuantes')
+  for (let i = 0; i < 8; i++) {
+    const span = document.createElement('div')
+    span.className = 'flutuante'
+    caixa.appendChild(span)
+    flutuantes.push(span)
+  }
 }
-let spawnTimer = 0
+let proximoFlutuante = 0
+const _tela = new THREE.Vector3()
 
-function spawnCar() {
-  const c = cars.find((x) => !x.userData.active)
-  if (!c) return
-  c.userData.active = true
-  c.visible = true
-  c.position.set(LANES[(Math.random() * LANES.length) | 0], 0.6, -80)
+function pontoFlutuante(texto, objeto) {
+  const span = flutuantes[proximoFlutuante]
+  proximoFlutuante = (proximoFlutuante + 1) % flutuantes.length
+  _tela.setFromMatrixPosition(objeto.matrixWorld).project(camera)
+  span.textContent = texto
+  span.style.left = `${(_tela.x * 0.5 + 0.5) * innerWidth}px`
+  span.style.top = `${(-_tela.y * 0.5 + 0.5) * innerHeight}px`
+  span.classList.remove('anima')
+  void span.offsetWidth        // reinicia a animação CSS
+  span.classList.add('anima')
 }
 
-function resetGame() {
-  cars.forEach((c) => { c.userData.active = false; c.visible = false })
-  moto.position.x = 0; targetX = 0; steer = 0
-  spawnTimer = 0
-  state = 'jogando'
-  setOverlay(false)
+// ------------------------------------------------------------------ ranking
+function dataCurta() {
+  const d = new Date()
+  const dois = (n) => String(n).padStart(2, '0')
+  return `${dois(d.getDate())}/${dois(d.getMonth() + 1)}/${d.getFullYear()}`
 }
 
-function setOverlay(show, msg) {
-  const o = document.getElementById('overlay')
-  o.classList.toggle('hidden', !show)
-  if (msg) document.getElementById('msg').textContent = msg
+/** Lê o top 10 do localStorage; JSON corrompido ou storage bloqueado vira []. */
+function lerRanking() {
+  try {
+    const bruto = JSON.parse(localStorage.getItem(CHAVE_RANKING) || '[]')
+    if (!Array.isArray(bruto)) return []
+    return bruto
+      .filter((e) => e && typeof e.pontos === 'number' && Number.isFinite(e.pontos) && e.pontos >= 0)
+      .map((e) => ({ pontos: Math.floor(e.pontos), data: typeof e.data === 'string' ? e.data : '' }))
+      .sort((a, b) => b.pontos - a.pontos)
+      .slice(0, 10)
+  } catch (e) {
+    return []
+  }
 }
 
-// ---- banner de atualização ----
+function salvarRanking(lista) {
+  try {
+    localStorage.setItem(CHAVE_RANKING, JSON.stringify(lista))
+  } catch (e) { /* modo privado / storage cheio: o jogo segue sem ranking */ }
+}
+
+function desenharRanking(lista, entradaNova) {
+  const ol = el('fimRanking')
+  ol.innerHTML = ''
+  if (lista.length === 0) {
+    const li = document.createElement('li')
+    li.className = 'vazio'
+    li.textContent = 'Sem corridas registradas ainda'
+    ol.appendChild(li)
+    return
+  }
+  lista.forEach((entrada, i) => {
+    const li = document.createElement('li')
+    if (entrada === entradaNova) li.className = 'novo'
+    li.innerHTML = `<span class="pos">${i + 1}º</span>` +
+      `<span class="pts">${formatarPontos(entrada.pontos)}</span>` +
+      `<span class="quando">${entrada.data || ''}</span>`
+    ol.appendChild(li)
+  })
+}
+
+// -------------------------------------------------------------------- áudio
+const motor = criarMotor()
+let audioLiberado = false
+
+/** A política de autoplay exige um gesto: o primeiro comando serve de gesto. */
+function liberarAudio() {
+  if (audioLiberado) return
+  audioLiberado = true
+  motor.iniciar()
+  motor.setIntensidade(0)
+}
+
+// --------------------------------------------------------------- pool de 3D
+function montarPool() {
+  const montar = (pegar) => {
+    const v = pegar()
+    if (!v) return
+    v.objeto.visible = false
+    v.objeto.position.set(0, 0, Z_SPAWN)
+    scene.add(v.objeto)
+    veiculos.push({ ...v, ativo: false, faixa: 0, contado: false })
+  }
+  for (let i = 0; i < 9; i++) montar(pegarCarro)
+  for (let i = 0; i < 5; i++) montar(pegarCaminhao)
+}
+
+/**
+ * Escolhe uma faixa livre deixando SEMPRE ao menos uma saída: se só sobrar uma
+ * faixa vaga, o spawn é adiado. Sem isso a dificuldade viraria sorte.
+ */
+function faixaParaSpawn() {
+  const ocupadas = [false, false, false]
+  for (const v of veiculos) {
+    if (v.ativo && v.objeto.position.z < Z_SPAWN + 42) ocupadas[v.faixa] = true
+  }
+  const livres = []
+  for (let i = 0; i < FAIXAS.length; i++) if (!ocupadas[i]) livres.push(i)
+  if (livres.length <= 1) return -1
+  return livres[(Math.random() * livres.length) | 0]
+}
+
+function soltarVeiculo() {
+  const faixa = faixaParaSpawn()
+  if (faixa < 0) return
+  // 1 caminhão a cada ~4 veículos: são maiores e fecham muito mais a faixa.
+  const querCaminhao = Math.random() < 0.26
+  let escolhido = null
+  for (const v of veiculos) {
+    if (v.ativo) continue
+    if (querCaminhao === (v.tipo === 'caminhao')) { escolhido = v; break }
+    if (!escolhido) escolhido = v
+  }
+  if (!escolhido) return
+  escolhido.ativo = true
+  escolhido.contado = false
+  escolhido.faixa = faixa
+  escolhido.objeto.visible = true
+  escolhido.objeto.position.set(FAIXAS[faixa], 0, Z_SPAWN)
+}
+
+function recolherVeiculos() {
+  for (const v of veiculos) {
+    v.ativo = false
+    v.contado = false
+    v.objeto.visible = false
+    v.objeto.position.z = Z_SPAWN
+  }
+}
+
+// ----------------------------------------------------------------- estados
+function irParaEspera() {
+  estado = 'aguardando'
+  hud.classList.add('oculto')
+  mostrarTela('espera')
+  motor.setIntensidade(0)
+  motor.pausar()
+}
+
+function comecar() {
+  recolherVeiculos()
+  placar = criarPlacar()
+  velocidade = VEL_INICIAL
+  tempoCorrida = 0
+  tempoSpawn = 0
+  alvoX = 0
+  steer = 0
+  acelerando = false
+  if (moto) {
+    moto.position.x = 0
+    moto.rotation.set(0, 0, 0)
+  }
+  atualizarHud(true)
+  estado = 'jogando'
+  hud.classList.remove('oculto')
+  mostrarTela(null)
+  fecharQr()
+  cenario.definirEscurecido(false)
+  liberarAudio()
+  motor.retomar()
+}
+
+function pausar() {
+  if (estado !== 'jogando') return
+  estado = 'pausado'
+  mostrarTela('pausa')
+  cenario.definirEscurecido(true)
+  motor.pausar()
+}
+
+function retomar() {
+  if (estado !== 'pausado') return
+  estado = 'jogando'
+  mostrarTela(null)
+  cenario.definirEscurecido(false)
+  motor.retomar()
+}
+
+function bater() {
+  estado = 'crashed'
+  motor.setIntensidade(0)
+  motor.pausar()
+  if (moto) moto.rotation.z = 0.85   // a moto deita no chão
+
+  const anterior = lerRanking()
+  const recorde = ehRecorde(anterior, placar.pontos)
+  const entrada = { pontos: placar.pontos, data: dataCurta() }
+  const atualizado = inserirNoRanking(anterior, entrada, 10)
+  salvarRanking(atualizado)
+
+  el('fimPontos').textContent = formatarPontos(placar.pontos)
+  el('fimDetalhe').textContent = textoDetalhe()
+  el('fimRecorde').classList.toggle('oculto', !recorde)
+  desenharRanking(atualizado, entrada)
+
+  hud.classList.add('oculto')
+  fecharQr()
+  mostrarTela('fim')
+}
+
+function definirPeriodo(novo) {
+  if (novo !== 'dia' && novo !== 'noite') return
+  periodo = novo
+  cenario.definirPeriodo(novo)
+  elPeriodo.textContent = novo === 'noite' ? '🌙 Noite' : '☀ Dia'
+}
+
+// ---------------------------------------------------------------------- QR
+function abrirQr() {
+  qrAberto = true
+  telaQr.classList.remove('oculto')
+}
+function fecharQr() {
+  qrAberto = false
+  telaQr.classList.add('oculto')
+}
+function alternarQr() {
+  if (qrAberto) fecharQr(); else abrirQr()
+}
+
+// -------------------------------------------------------------------- HUD
+let hudPontos = -1
+let hudVelocidade = -1
+
+function textoDetalhe() {
+  const c = placar.carros
+  const t = placar.caminhoes
+  return `${c} ${c === 1 ? 'carro' : 'carros'} · ${t} ${t === 1 ? 'caminhão' : 'caminhões'}`
+}
+
+/** Só escreve no DOM quando o número muda: texto por frame trava layout na TV. */
+function atualizarHud(forcar) {
+  if (forcar || placar.pontos !== hudPontos) {
+    hudPontos = placar.pontos
+    elPontos.textContent = formatarPontos(placar.pontos)
+    elDetalhe.textContent = textoDetalhe()
+  }
+  const kmh = Math.round(velocidade * KMH_POR_UNIDADE)
+  if (forcar || kmh !== hudVelocidade) {
+    hudVelocidade = kmh
+    elVelocidade.textContent = String(kmh)
+    const fracao = Math.max(0, Math.min(1, (velocidade - VEL_INICIAL) / (VEL_TURBO - VEL_INICIAL)))
+    elBarraAcel.style.width = `${Math.round(fracao * 100)}%`
+  }
+  elAcelerador.classList.toggle('ativo', acelerando)
+}
+
+// ------------------------------------------------- banner de atualização
 // A checagem no GitHub roda em paralelo ao start do servidor e pode terminar
 // depois desta página carregar; por isso a consulta se repete algumas vezes.
 let atualizacao = null      // { versao, changelog } quando há versão nova
@@ -97,9 +345,9 @@ let atualizando = false     // download em andamento (o banner para de aceitar O
 let tentativasUpdate = 0
 
 function mostrarBanner(texto) {
-  const b = document.getElementById('update')
+  const b = el('update')
   b.textContent = texto
-  b.classList.remove('hidden')
+  b.classList.remove('oculto')
 }
 
 function checarAtualizacao() {
@@ -138,22 +386,50 @@ window.__updateFalhou = () => {
 
 checarAtualizacao()
 
-// ---- config + QR ----
-fetch('/config').then((r) => r.json()).then((cfg) => {
-  // eslint-disable-next-line no-new
-  new QRCode(document.getElementById('qr'), { text: cfg.controllerUrl, width: 220, height: 220 })
-})
+// --------------------------------------------------------------- config/QR
+fetch('/config')
+  .then((r) => r.json())
+  .then((cfg) => {
+    if (!cfg || !cfg.controllerUrl || typeof QRCode !== 'function') return
+    // Dois códigos: o da tela de espera e o do overlay sob demanda.
+    for (const id of ['qrEspera', 'qrPedido']) {
+      // eslint-disable-next-line no-new
+      new QRCode(el(id), { text: cfg.controllerUrl, width: 200, height: 200 })
+    }
+  })
+  .catch(() => {})
 
-// ---- WebSocket (recebe steer/restart do celular) ----
+// ----------------------------------------------------------------- comandos
+function comando(nome) {
+  liberarAudio()
+  if (estado === 'carregando') return
+  if (nome === 'restart') { comecar(); return }
+  if (nome === 'pause') { pausar(); return }
+  if (nome === 'resume') { retomar(); return }
+  if (nome === 'qr') alternarQr()
+}
+
+/** Qualquer entrada de direção/acelerador na tela de espera já larga a corrida. */
+function talvezComecar() {
+  if (estado === 'aguardando') comecar()
+}
+
 function connectWs() {
   const ws = new WebSocket(`wss://${location.host}/ws`)
   ws.onmessage = (ev) => {
     const m = parseMessage(ev.data)
     if (m.type === 'steer') {
+      liberarAudio()
       steer = m.value
-      if (state === 'aguardando') resetGame()
-    } else if (m.type === 'action' && m.name === 'restart') {
-      resetGame()
+      talvezComecar()
+    } else if (m.type === 'throttle') {
+      liberarAudio()
+      acelerando = m.ativo
+      talvezComecar()
+    } else if (m.type === 'setup') {
+      if (estado !== 'carregando') definirPeriodo(m.periodo)
+    } else if (m.type === 'action') {
+      comando(m.name)
     }
   }
   ws.onclose = () => setTimeout(connectWs, 1000)
@@ -161,60 +437,142 @@ function connectWs() {
 }
 connectWs()
 
-// ---- fallback de teclado (dev, sem celular) ----
+// -------------------------------------------- teclado (controle da TV / dev)
 addEventListener('keydown', (e) => {
-  if (e.key === 'ArrowLeft') { steer = -1; if (state === 'aguardando') resetGame() }
-  if (e.key === 'ArrowRight') { steer = 1; if (state === 'aguardando') resetGame() }
-  if (e.key === 'Enter') {
+  liberarAudio()
+  if (e.key === 'ArrowLeft') { steer = -1; talvezComecar() }
+  else if (e.key === 'ArrowRight') { steer = 1; talvezComecar() }
+  else if (e.key === 'ArrowUp' || e.key === ' ' || e.key === 'Spacebar') {
+    acelerando = true
+    talvezComecar()
+  } else if (e.key === 'Enter') {
     // O OK do controle da TV chega como Enter. Enquanto houver atualização à
     // espera de confirmação, ele é do banner; depois volta a ser do jogo.
     // As setas (jogabilidade) nunca são tocadas por isso.
     if (atualizacao && !atualizando) { iniciarAtualizacao(); return }
-    if (state === 'crashed') resetGame()
+    if (estado === 'aguardando' || estado === 'crashed') comecar()
+    else if (estado === 'pausado') retomar()
+  } else if (e.key === 'p' || e.key === 'P') {
+    if (estado === 'pausado') retomar(); else pausar()
+  } else if (e.key === 'q' || e.key === 'Q') {
+    if (estado !== 'carregando') alternarQr()
   }
 })
+
 addEventListener('keyup', (e) => {
   if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') steer = 0
+  if (e.key === 'ArrowUp' || e.key === ' ' || e.key === 'Spacebar') acelerando = false
 })
 
-// ---- loop ----
-let last = performance.now()
-function frame(now) {
-  const dt = Math.min((now - last) / 1000, 0.05)
-  last = now
+// -------------------------------------------------------------------- loop
+let ultimo = performance.now()
+let inclinacao = 0
 
-  if (state === 'jogando') {
-    // move a moto lateralmente
-    targetX = Math.max(-3.2, Math.min(3.2, targetX + steer * dt * 6))
-    moto.position.x += (targetX - moto.position.x) * 0.2
-    moto.rotation.z = -steer * 0.3
+function passo(dt) {
+  tempoCorrida += dt
 
-    // "mundo" andando: faixas vêm em direção à câmera e reciclam para o fundo
-    for (const s of stripes) {
-      s.position.z += speed * dt
-      if (s.position.z > 6) s.position.z -= 320
+  // velocidade: sobe rápido no acelerador e volta ao cruzeiro ao soltar
+  const cruzeiro = VEL_CRUZEIRO + Math.min(12, tempoCorrida * 0.32)
+  const alvo = acelerando ? VEL_TURBO : cruzeiro
+  velocidade += (alvo - velocidade) * Math.min(1, dt * (acelerando ? 0.9 : 1.6))
+
+  // direção lateral suavizada + inclinação da moto na curva
+  alvoX = Math.max(-LIMITE_X, Math.min(LIMITE_X, alvoX + steer * dt * VEL_LATERAL))
+  moto.position.x += (alvoX - moto.position.x) * Math.min(1, dt * 10)
+  inclinacao += (steer - inclinacao) * Math.min(1, dt * 8)
+  moto.rotation.z = -inclinacao * 0.45
+  moto.rotation.y = -inclinacao * 0.10
+
+  cenario.atualizar(velocidade * dt)
+
+  // tráfego: vem de frente, então a aproximação soma as duas velocidades
+  const dzTrafego = (velocidade + VEL_TRAFEGO) * dt
+  const caixaMoto = moto.userData.hitbox
+  for (const v of veiculos) {
+    if (!v.ativo) continue
+    const o = v.objeto
+    o.position.z += dzTrafego
+
+    if (!v.contado && o.position.z > moto.position.z) {
+      v.contado = true
+      const antes = placar.pontos
+      placar = registrarUltrapassagem(placar, v.tipo, acelerando)
+      pontoFlutuante(`+${placar.pontos - antes}`, o)
     }
 
-    spawnTimer += dt
-    if (spawnTimer > 0.9) { spawnTimer = 0; spawnCar() }
-
-    for (const c of cars) {
-      if (!c.userData.active) continue
-      c.position.z += speed * dt
-      if (c.position.z > 6) { c.userData.active = false; c.visible = false; continue }
-      const hit = aabbOverlap(
-        { x: moto.position.x, z: moto.position.z, w: MOTO.w, d: MOTO.d },
-        { x: c.position.x, z: c.position.z, w: CAR.w, d: CAR.d }
-      )
-      if (hit) { state = 'crashed'; setOverlay(true, 'Bateu! Reinicie no celular (ou Enter)') }
+    if (o.position.z > Z_SUMICO) {
+      v.ativo = false
+      o.visible = false
+      continue
     }
+
+    const bateu = aabbOverlap(
+      { x: moto.position.x, z: moto.position.z, w: caixaMoto.w, d: caixaMoto.d },
+      { x: o.position.x, z: o.position.z, w: v.hitbox.w, d: v.hitbox.d },
+    )
+    if (bateu) { bater(); return }
   }
 
-  // câmera em 3ª pessoa
-  camera.position.set(moto.position.x * 0.5, 4, moto.position.z + 8)
-  camera.lookAt(moto.position.x * 0.3, 1, moto.position.z - 10)
+  // dificuldade: o intervalo entre veículos encurta com tempo e pontuação
+  const intervalo = Math.max(0.38, 1.15 - tempoCorrida * 0.008 - placar.pontos * 0.004)
+  tempoSpawn += dt
+  if (tempoSpawn >= intervalo) { tempoSpawn = 0; soltarVeiculo() }
+
+  motor.setIntensidade(Math.max(0, Math.min(1, (velocidade - VEL_INICIAL) / (VEL_TURBO - VEL_INICIAL))))
+  atualizarHud(false)
+}
+
+const FOV_BASE = 70
+const FOV_TURBO = 82
+
+function frame(agora) {
+  const dt = Math.min((agora - ultimo) / 1000, 0.05)
+  ultimo = agora
+
+  if (estado === 'jogando') passo(dt)
+
+  if (moto) {
+    // câmera em 3ª pessoa, atrás e um pouco acima, com folga na lateral
+    const alvoCamX = moto.position.x * 0.62
+    camera.position.x += (alvoCamX - camera.position.x) * Math.min(1, dt * 5)
+    camera.position.y = 2.7
+    camera.position.z = 6.0
+    camera.lookAt(moto.position.x * 0.4, 1.15, -14)
+
+    const fovAlvo = estado === 'jogando' && acelerando ? FOV_TURBO : FOV_BASE
+    if (Math.abs(camera.fov - fovAlvo) > 0.05) {
+      camera.fov += (fovAlvo - camera.fov) * Math.min(1, dt * 3)
+      camera.updateProjectionMatrix()
+    }
+  }
 
   renderer.render(scene, camera)
   requestAnimationFrame(frame)
 }
-requestAnimationFrame(frame)
+
+// ------------------------------------------------------------------ boot
+async function iniciar() {
+  const preenche = el('cargaPreenche')
+  const texto = el('cargaTexto')
+  await carregarModelos((fracao, nome) => {
+    preenche.style.width = `${Math.round(fracao * 100)}%`
+    texto.textContent = `Carregando modelos… ${Math.round(fracao * 100)}% (${nome})`
+  })
+
+  cenario = criarCenario(scene, periodo)
+  moto = await criarMoto()
+  scene.add(moto)
+  cenario.farolMoto = moto.userData.farol
+  cenario.definirPeriodo(periodo)
+  montarPool()
+
+  preenche.style.width = '100%'
+  irParaEspera()
+  requestAnimationFrame(frame)
+}
+
+iniciar().catch((erro) => {
+  const texto = el('cargaTexto')
+  if (texto) texto.textContent = `Falha ao carregar o jogo: ${erro && erro.message ? erro.message : erro}`
+  console.error('Falha ao iniciar o jogo', erro)
+})
