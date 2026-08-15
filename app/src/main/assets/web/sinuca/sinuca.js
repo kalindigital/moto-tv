@@ -344,6 +344,25 @@ function podeJogar(id) {
   return dono == null || id == null || dono === id
 }
 
+/**
+ * Quem escolheu a sinuca no celular é o dono da partida: vira o Jogador 1 e
+ * limpa o lobby (a vaga 2 volta a ficar livre e o modo é escolhido de novo).
+ * Sem isto, uma vaga presa de uma sessão anterior empurrava o dono para
+ * Jogador 2.
+ */
+function onEscolheu(id) {
+  if (id == null) return
+  vistoEm[id] = performance.now()
+  if (controladores[1] === id) return       // já é o dono: nada a refazer
+  controladores[1] = id
+  controladores[2] = null
+  modo = null
+  dificuldade = 'medio'
+  enviar(serializeAssign(id, 1))
+  atualizarEspera()
+  enviarTurno()
+}
+
 function onJoin(id) {
   if (id == null) return
   const agora = performance.now()
@@ -581,7 +600,7 @@ function connectWs() {
     const m = parseMessage(ev.data)
     // 'pick' só registra o controle (a TV já navegou até aqui); o jogo começa
     // quando a aparência é confirmada ou na primeira mira/tacada.
-    if (m.type === 'pick' && m.game === 'sinuca') enviarTurno()
+    if (m.type === 'pick' && m.game === 'sinuca') { onEscolheu(m.id); enviarTurno() }
     else if (m.type === 'join') onJoin(m.id)
     else if (m.type === 'mode') aplicarModo(m.mode, m.dificuldade)
     else if (m.type === 'sinucaSetup') { aplicarAparencia(m.taco, m.mesa); comecarSeNecessario() }

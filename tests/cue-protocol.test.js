@@ -18,6 +18,11 @@ describe('cue-protocol · pick de jogo', () => {
     expect(JSON.parse(serializePick('sinuca'))).toEqual({ t: 'pick', game: 'sinuca' })
     expect(JSON.parse(serializePick('moto'))).toEqual({ t: 'pick', game: 'moto' })
   })
+  it('leva o id de quem escolheu (esse celular vira o Jogador 1)', () => {
+    expect(JSON.parse(serializePick('sinuca', 'abc'))).toEqual({ t: 'pick', game: 'sinuca', id: 'abc' })
+    expect(parseMessage('{"t":"pick","game":"sinuca","id":"abc"}'))
+      .toEqual({ type: 'pick', game: 'sinuca', id: 'abc' })
+  })
   it('parseia pick de jogo válido', () => {
     expect(parseMessage('{"t":"pick","game":"sinuca"}')).toEqual({ type: 'pick', game: 'sinuca' })
     expect(parseMessage('{"t":"pick","game":"moto"}')).toEqual({ type: 'pick', game: 'moto' })

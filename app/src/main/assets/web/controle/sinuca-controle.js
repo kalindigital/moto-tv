@@ -34,6 +34,9 @@ const meuId = (window.__ctrl && window.__ctrl.id)
     ? crypto.randomUUID()
     : `c${Math.random().toString(36).slice(2)}${Date.now()}`)
 
+// Este celular escolheu o jogo na lista? Então ele é o dono da partida.
+const souDono = !!(window.__ctrl && window.__ctrl.escolheu)
+
 let ws = null
 let taco = 'classico'
 let mesa = 'verde'
@@ -67,15 +70,23 @@ function connect() {
   ws.onopen = () => {
     dot.classList.add('on')
     conn.textContent = 'conectado'
-    enviar(serializePick('sinuca'))    // pede à TV para abrir a sinuca
-    enviar(serializeJoin(meuId))       // (re)entra no lobby: vira Jogador 1 ou 2
+    // Quem escolheu o jogo na lista abre a partida e fica com a vaga de
+    // Jogador 1; quem chegou pelo QR do multiplayer apenas pede vaga livre.
+    if (souDono) enviar(serializePick('sinuca', meuId))
+    else enviar(serializeJoin(meuId))
     if (ultimoModo) enviar(ultimoModo)
     if (ultimoSetup) enviar(ultimoSetup)
     // O join também é batimento: enquanto não há vaga ele insiste, e depois
     // mantém a TV sabendo que este celular continua vivo (para reciclar a vaga
     // de quem saiu, por exemplo ao recarregar a página com outro id).
     if (!reingresso) {
-      reingresso = setInterval(() => enviar(serializeJoin(meuId)), 1500)
+      reingresso = setInterval(() => {
+        // O dono repete o pick até a página do jogo aparecer e lhe dar a vaga 1
+        // (quando ele escolheu, a TV ainda estava no menu). Depois disso, o
+        // envio vira só batimento de vida.
+        if (souDono && meuPlayer !== 1) enviar(serializePick('sinuca', meuId))
+        else enviar(serializeJoin(meuId))
+      }, 1500)
     }
   }
   ws.onclose = () => {

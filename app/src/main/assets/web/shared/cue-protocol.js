@@ -11,8 +11,11 @@ const DIFICULDADES_VALIDAS = ['facil', 'medio', 'dificil']
 
 const clamp01 = (v) => Math.max(0, Math.min(1, v))
 
-export function serializePick(game) {
-  return JSON.stringify({ t: 'pick', game })
+// Quem escolhe o jogo assume a vaga do Jogador 1 — por isso o pick leva o id.
+export function serializePick(game, id) {
+  const m = { t: 'pick', game }
+  if (id) m.id = id
+  return JSON.stringify(m)
 }
 // O `id` (opcional) identifica o celular que enviou — usado no modo 2 jogadores.
 // `efeito` (opcional) é onde o taco bate na branca: x lateral, y vertical, -1..1.
@@ -69,7 +72,9 @@ export function parseMessage(str) {
   if (!m || typeof m !== 'object') return { type: 'unknown' }
 
   if (m.t === 'pick' && JOGOS_VALIDOS.includes(m.game)) {
-    return { type: 'pick', game: m.game }
+    const r = { type: 'pick', game: m.game }
+    if (typeof m.id === 'string') r.id = m.id
+    return r
   }
   if ((m.t === 'aim' || m.t === 'shoot') && Number.isFinite(m.a) && Number.isFinite(m.p)) {
     const r = { type: m.t, angle: m.a, power: clamp01(m.p) }

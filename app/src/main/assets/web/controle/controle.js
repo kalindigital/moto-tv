@@ -22,7 +22,9 @@ const meuId = (window.crypto && crypto.randomUUID)
   ? crypto.randomUUID()
   : `c${Math.random().toString(36).slice(2)}${Date.now()}`
 
-window.__ctrl = { id: meuId, player: null }
+// `escolheu` marca o celular que apertou o jogo na lista: é ele que assume a
+// vaga de Jogador 1. Quem entra depois (pelo QR do multiplayer) só pede vaga.
+window.__ctrl = { id: meuId, player: null, escolheu: false }
 
 const el = (id) => document.getElementById(id)
 
@@ -100,6 +102,7 @@ el('jogos').addEventListener('click', async (e) => {
   const botao = e.target.closest('[data-game]')
   if (!botao || resolvido) return
   resolvido = true
+  window.__ctrl.escolheu = true    // este celular é o dono da partida (Jogador 1)
   if (botao.dataset.game === 'moto') entrarNaMoto()
   else entrarNaSinuca()
 })
