@@ -46,15 +46,32 @@ let qrAberto = false
 // ------------------------------------------------------------------ cena 3D
 const scene = new THREE.Scene()
 const camera = new THREE.PerspectiveCamera(70, innerWidth / innerHeight, 0.1, 260)
-const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' })
-renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5))
-renderer.setSize(innerWidth, innerHeight)
-document.getElementById('palco').appendChild(renderer.domElement)
-addEventListener('resize', () => {
+// TV tem GPU fraca: antialias (MSAA) e pixel ratio alto eram o maior custo daqui.
+// Renderizamos abaixo da resolução da tela e deixamos o próprio painel esticar a
+// imagem — o ganho de FPS é grande e a perda visual, pequena a alguns metros.
+const renderer = new THREE.WebGLRenderer({
+  antialias: false,
+  powerPreference: 'high-performance',
+  precision: 'mediump',
+})
+renderer.shadowMap.enabled = false
+let escalaRender = Number(localStorage.getItem('moto-tv.escala')) || 0.75
+
+function dimensionar() {
   camera.aspect = innerWidth / innerHeight
   camera.updateProjectionMatrix()
-  renderer.setSize(innerWidth, innerHeight)
-})
+  renderer.setPixelRatio(1)
+  renderer.setSize(
+    Math.max(320, Math.round(innerWidth * escalaRender)),
+    Math.max(180, Math.round(innerHeight * escalaRender)),
+    false,
+  )
+  renderer.domElement.style.width = '100%'
+  renderer.domElement.style.height = '100%'
+}
+dimensionar()
+document.getElementById('palco').appendChild(renderer.domElement)
+addEventListener('resize', dimensionar)
 
 let cenario = null
 let moto = null
@@ -588,8 +605,65 @@ function frame(agora) {
   }
 
   renderer.render(scene, camera)
+  medirFps(agora)
   requestAnimationFrame(frame)
 }
+
+// ---------------------------------------------------- FPS + qualidade adaptativa
+// A TV não tem teclado: o contador fica sempre visível. Se o FPS ficar baixo por
+// alguns segundos, reduzimos a escala de renderização sozinhos (e guardamos a
+// escolha, para a próxima abertura já começar no ponto certo).
+const painelFps = document.createElement('div')
+painelFps.style.cssText =
+  'position:fixed;top:10px;right:14px;z-index:60;font:600 13px/1.2 system-ui,sans-serif;' +
+  'color:#c9b8ff;background:rgba(10,8,18,.55);padding:5px 9px;border-radius:8px;' +
+  'letter-spacing:.04em;pointer-events:none'
+document.body.appendChild(painelFps)
+
+let quadros = 0
+let janelaFps = 0
+let fpsAtual = 60
+let segurandoBaixo = 0
+
+function medirFps(agora) {
+  quadros++
+  if (janelaFps === 0) janelaFps = agora
+  const decorrido = agora - janelaFps
+  if (decorrido < 500) return
+
+  fpsAtual = Math.round((quadros * 1000) / decorrido)
+  quadros = 0
+  janelaFps = agora
+  painelFps.textContent = `${fpsAtual} FPS · ${Math.round(escalaRender * 100)}%`
+
+  // Só reduz durante a partida, para não reagir a telas paradas.
+  if (estado !== 'jogando') { segurandoBaixo = 0; return }
+  if (fpsAtual < 45 && escalaRender > 0.5) {
+    segurandoBaixo += decorrido
+    if (segurandoBaixo >= 2000) {
+      escalaRender = Math.max(0.5, Math.round((escalaRender - 0.15) * 100) / 100)
+      localStorage.setItem('moto-tv.escala', String(escalaRender))
+      dimensionar()
+      segurandoBaixo = 0
+    }
+  } else {
+    segurandoBaixo = 0
+  }
+}
+
+// HOOK TEMPORARIO DE MEDICAO — remover
+window.__diag = () => ({
+  calls: renderer.info.render.calls,
+  tris: renderer.info.render.triangles,
+  programas: renderer.info.programs.length,
+  luzes: (() => { let n = 0; scene.traverse((o) => { if (o.isLight) n += 1 }); return n })(),
+  objetos: (() => { let n = 0; scene.traverse((o) => { if (o.isMesh) n += 1 }); return n })(),
+  estado,
+  dpr: renderer.getPixelRatio(),
+  tamanho: [renderer.domElement.width, renderer.domElement.height],
+})
+window.__forcar = (nome) => comando(nome)
+window.__periodo = (p) => definirPeriodo(p)
 
 // ------------------------------------------------------------------ boot
 async function iniciar() {
