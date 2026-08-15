@@ -52,8 +52,9 @@ const controladores = { 1: null, 2: null }
 const vistoEm = {}            // id → instante do último sinal de vida
 const VAGA_OCIOSA_MS = 8000   // sem batimento por tanto tempo, a vaga é reciclada
 
-// Modo da partida: 'multi' (dois celulares) ou 'solo' (Jogador 2 é a máquina).
-let modo = 'multi'
+// Modo da partida: 'solo' (Jogador 2 é a máquina) ou 'multi' (dois celulares).
+// Começa em null: ainda não escolhido no celular — a TV mostra isso na espera.
+let modo = null
 let dificuldade = 'medio'
 let pensando = false          // a máquina está "mirando" (espera antes de tacar)
 const PENSA_MS = 1100
@@ -368,18 +369,41 @@ function onJoin(id) {
   enviarTurno()
 }
 
+const NOME_NIVEL = { facil: 'Fácil', medio: 'Médio', dificil: 'Difícil' }
+
+/**
+ * A tela de espera acompanha o que o celular está fazendo. O QR só aparece
+ * quando falta alguém entrar: para chamar o Jogador 1 e, no multiplayer, o
+ * Jogador 2. Escolhido o modo sozinho, não há QR nenhum — a TV só mostra o que
+ * foi escolhido enquanto o jogador ajusta a mesa no celular.
+ */
 function atualizarEspera() {
   const status = el('esperaStatus')
-  if (!status) return
+  const dica = el('esperaDica')
+  const cartao = el('cartaoQr')
+  if (!status || !dica || !cartao) return
+
+  let mostrarQr = true
   if (!controladores[1]) {
     status.textContent = 'Escaneie o QR para entrar como Jogador 1'
+    dica.textContent = '8-ball · o jogo você escolhe pelo celular'
+  } else if (!modo) {
+    mostrarQr = false
+    status.textContent = 'Escolha no celular: sozinho ou multiplayer'
+    dica.textContent = 'No modo sozinho dá para escolher o nível da máquina'
   } else if (modo === 'solo') {
-    status.textContent = '✓ Jogador 1 pronto — partida contra a máquina'
+    mostrarQr = false
+    status.textContent = `Sozinho contra a máquina · nível ${NOME_NIVEL[dificuldade] || 'Médio'}`
+    dica.textContent = 'Escolha o taco e a mesa no celular e comece'
   } else if (!controladores[2]) {
-    status.textContent = '✓ Jogador 1 pronto — Jogador 2, escaneie este QR para entrar'
+    status.textContent = 'Multiplayer — Jogador 2, escaneie este QR para entrar'
+    dica.textContent = 'O Jogador 1 já pode escolher o taco e a mesa'
   } else {
-    status.textContent = '✓ Jogadores 1 e 2 prontos — é só começar'
+    mostrarQr = false
+    status.textContent = 'Jogadores 1 e 2 prontos — é só começar'
+    dica.textContent = 'Cada um joga na sua vez, pelo próprio celular'
   }
+  cartao.classList.toggle('oculto', !mostrarQr)
 }
 
 // ------------------------------------------------------------------- entrada

@@ -89,6 +89,9 @@
 
     /* espera: QR ao lado do texto — cabe folgado na altura da TV */
     .lado{display:flex;align-items:center;gap:clamp(16px,3vw,44px);flex-wrap:wrap;justify-content:center}
+    /* Sem isto o cartão do QR encolhe quando a linha não cabe e o canvas de
+       200px transborda por cima do texto (foi o que aconteceu na TV). */
+    .lado > *{flex:0 0 auto}
     .lado .texto{text-align:left;max-width:min(52vw,560px);display:flex;flex-direction:column;
       gap:clamp(6px,1.2vh,14px)}
     #esperaStatus{font-size:clamp(15px,2.2vh,26px);font-weight:700;color:var(--ouro)}
@@ -97,7 +100,9 @@
     .sub{font-size:clamp(14px,2vh,24px);color:rgba(243,244,251,.72);letter-spacing:.08em;max-width:72vw}
     .cartao{background:var(--painel);border:1px solid var(--borda);border-radius:20px;
       padding:clamp(14px,2.4vh,26px);backdrop-filter:blur(8px);box-shadow:0 24px 60px rgba(0,0,0,.55)}
-    .qr{background:#fff;padding:12px;border-radius:14px;line-height:0}
+    .qr{background:#fff;padding:12px;border-radius:14px;line-height:0;
+      width:224px;height:224px}
+    .qr canvas,.qr img,.qr table{width:200px !important;height:200px !important;display:block}
     #fimTitulo{font-size:clamp(40px,10vh,120px);font-weight:900;letter-spacing:.04em;color:var(--ouro);
       text-shadow:0 0 40px rgba(255,207,61,.6);line-height:.95}
   </style>
@@ -139,11 +144,11 @@
   <div id="telaEspera" class="tela">
     <div class="marca"><span>Sinuca</span></div>
     <div class="lado">
-      <div class="cartao"><div id="qrEspera" class="qr"></div></div>
+      <!-- o QR só aparece quando falta alguém entrar -->
+      <div class="cartao" id="cartaoQr"><div id="qrEspera" class="qr"></div></div>
       <div class="texto">
-        <div class="sub">Aponte a câmera do celular para o código para entrar.</div>
         <div id="esperaStatus">Escaneie o QR para entrar como Jogador 1</div>
-        <div class="sub" style="opacity:.7">8-ball · cada jogador escaneia o mesmo código e joga na sua vez</div>
+        <div class="sub" id="esperaDica">8-ball · o jogo você escolhe pelo celular</div>
       </div>
     </div>
   </div>
