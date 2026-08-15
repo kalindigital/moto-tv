@@ -23,9 +23,12 @@ const ctx = pad.getContext('2d')
 const botaoPos = el('sinuca-posicionar')
 
 // Identidade deste celular (um por aba/aparelho): define qual jogador ele é.
-const meuId = (window.crypto && crypto.randomUUID)
-  ? crypto.randomUUID()
-  : `c${Math.random().toString(36).slice(2)}${Date.now()}`
+// O seletor (controle.js) já pode ter entrado no lobby e recebido a vaga —
+// nesse caso reaproveitamos id e jogador para não pedir vaga duas vezes.
+const meuId = (window.__ctrl && window.__ctrl.id)
+  || ((window.crypto && crypto.randomUUID)
+    ? crypto.randomUUID()
+    : `c${Math.random().toString(36).slice(2)}${Date.now()}`)
 
 let ws = null
 let taco = 'classico'
@@ -33,7 +36,8 @@ let mesa = 'verde'
 let ultimoSetup = null
 let ballInHand = false
 let modoPosicionar = false
-let meuPlayer = null     // 1 ou 2, atribuído pela TV
+let meuPlayer = (window.__ctrl && window.__ctrl.player) || null   // 1 ou 2, atribuído pela TV
+let primeiroTurno = true // o 1º 'turn' decide a tela (aparência x pad)
 let vezAtual = 1         // de quem é a vez (do último 'turn')
 let vezCid = null        // id do controle dono da vez (null = vaga aberta)
 let faseJogo = 'playing'
@@ -57,14 +61,13 @@ function connect() {
     dot.classList.add('on')
     conn.textContent = 'conectado'
     enviar(serializePick('sinuca'))    // pede à TV para abrir a sinuca
-    enviar(serializeJoin(meuId))       // entra no lobby (vira Jogador 1 ou 2)
+    enviar(serializeJoin(meuId))       // (re)entra no lobby: vira Jogador 1 ou 2
     if (ultimoSetup) enviar(ultimoSetup)
-    // a página do jogo pode carregar depois: reenvia join até ser atribuído
+    // O join também é batimento: enquanto não há vaga ele insiste, e depois
+    // mantém a TV sabendo que este celular continua vivo (para reciclar a vaga
+    // de quem saiu, por exemplo ao recarregar a página com outro id).
     if (!reingresso) {
-      reingresso = setInterval(() => {
-        if (meuPlayer != null) { clearInterval(reingresso); reingresso = null; return }
-        enviar(serializeJoin(meuId))
-      }, 600)
+      reingresso = setInterval(() => enviar(serializeJoin(meuId)), 1500)
     }
   }
   ws.onclose = () => {
@@ -80,17 +83,21 @@ function connect() {
   }
 }
 
-function aplicarAtribuicao(player) {
-  if (meuPlayer === player) return
-  meuPlayer = player
-  if (reingresso) { clearInterval(reingresso); reingresso = null }
-  // Jogador 2 não escolhe a aparência (a mesa é do Jogador 1): vai direto ao pad
-  if (player === 2 && !telaPrep.hidden) {
+function irParaPad() {
+  if (telaCtrl.hidden) {
     telaPrep.hidden = true
     telaCtrl.hidden = false
     requestAnimationFrame(dimensionarPad)
   }
-  atualizarCabecalho()
+}
+
+function aplicarAtribuicao(player) {
+  const mudou = meuPlayer !== player
+  meuPlayer = player
+  if (window.__ctrl) window.__ctrl.player = player
+  // Jogador 2 não escolhe a aparência (a mesa é do Jogador 1): vai direto ao pad
+  if (player === 2) irParaPad()
+  if (mudou) atualizarCabecalho()
 }
 
 let grupoAtual = null
@@ -102,6 +109,11 @@ function aplicarTurno(m) {
   faseJogo = m.phase
   vencedor = m.winner
   grupoAtual = m.group
+  // Entrou com a partida já rolando: pula a aparência e vai direto para o pad.
+  if (primeiroTurno) {
+    primeiroTurno = false
+    if (faseJogo !== 'espera') irParaPad()
+  }
   atualizarCabecalho()
   desenharPad()
 }
@@ -160,10 +172,12 @@ el('sinuca-comecar').addEventListener('click', () => {
 
 // --------------------------------------------------------------- ações
 el('sinuca-reiniciar').addEventListener('click', () => {
-  // Reiniciar volta à aparência: dá para trocar taco/mesa antes de recomeçar.
+  vibrar(12)
+  // O Jogador 1 é o dono da mesa: volta à aparência para trocar taco/mesa antes
+  // de recomeçar. O Jogador 2 apenas pede o reinício.
+  if (meuPlayer === 2) { enviar(serializeAction('restart')); return }
   telaCtrl.hidden = true
   telaPrep.hidden = false
-  vibrar(12)
 })
 el('sinuca-qr').addEventListener('click', () => enviar(serializeAction('qr')))
 el('sinuca-sair').addEventListener('click', () => {
@@ -336,5 +350,10 @@ async function manterTelaAcesa() {
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'visible' && trava === null) manterTelaAcesa()
 })
+
+// Já entrou pelo lobby como Jogador 2? Vai direto ao pad, sem passar pela
+// aparência (a mesa quem escolhe é o Jogador 1).
+if (meuPlayer === 2) irParaPad()
+atualizarCabecalho()
 
 connect()

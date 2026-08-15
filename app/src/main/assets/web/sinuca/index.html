@@ -53,8 +53,22 @@
 
     /* telas */
     .tela{position:fixed;inset:0;z-index:6;display:flex;flex-direction:column;
-      align-items:center;justify-content:center;gap:clamp(10px,2vh,24px);text-align:center;
+      align-items:center;justify-content:center;gap:clamp(8px,1.6vh,20px);text-align:center;
+      padding:clamp(12px,2.4vh,28px) clamp(16px,3vw,44px);overflow:hidden;
       background:radial-gradient(120% 100% at 50% 0%,rgba(110,41,246,.26),rgba(3,4,10,.92) 62%)}
+    /* Nada pode ser espremido a ponto de o texto transbordar sobre o QR. */
+    .tela > *{flex:0 0 auto;max-width:100%}
+
+    /* A espera cobre a mesa: com o fundo translúcido as bolas apareciam atrás
+       do texto e atrapalhavam a leitura à distância. */
+    #telaEspera,#telaQr{
+      background:radial-gradient(120% 100% at 50% 0%,rgba(110,41,246,.30),rgba(5,6,12,.96) 58%),#05060c}
+
+    /* espera: QR ao lado do texto — cabe folgado na altura da TV */
+    .lado{display:flex;align-items:center;gap:clamp(16px,3vw,44px);flex-wrap:wrap;justify-content:center}
+    .lado .texto{text-align:left;max-width:min(52vw,560px);display:flex;flex-direction:column;
+      gap:clamp(6px,1.2vh,14px)}
+    #esperaStatus{font-size:clamp(15px,2.2vh,26px);font-weight:700;color:var(--ouro)}
     .marca{font-size:clamp(30px,7vh,86px);font-weight:900;letter-spacing:.14em;line-height:1;text-transform:uppercase}
     .marca span{color:var(--acento-claro);text-shadow:0 0 34px rgba(110,41,246,.9)}
     .sub{font-size:clamp(14px,2vh,24px);color:rgba(243,244,251,.72);letter-spacing:.08em;max-width:72vw}
@@ -89,10 +103,14 @@
   <!-- aguardando os controles -->
   <div id="telaEspera" class="tela">
     <div class="marca"><span>Sinuca</span></div>
-    <div class="sub">Aponte a câmera do celular para o código para entrar</div>
-    <div class="cartao"><div id="qrEspera" class="qr"></div></div>
-    <div class="sub" id="esperaStatus">Escaneie o QR para entrar como Jogador 1</div>
-    <div class="sub" style="opacity:.7">8-ball · cada jogador escaneia e joga na sua vez</div>
+    <div class="lado">
+      <div class="cartao"><div id="qrEspera" class="qr"></div></div>
+      <div class="texto">
+        <div class="sub">Aponte a câmera do celular para o código para entrar.</div>
+        <div id="esperaStatus">Escaneie o QR para entrar como Jogador 1</div>
+        <div class="sub" style="opacity:.7">8-ball · cada jogador escaneia o mesmo código e joga na sua vez</div>
+      </div>
+    </div>
   </div>
 
   <!-- fim de jogo -->

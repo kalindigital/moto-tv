@@ -39,6 +39,8 @@ const DUR_QUEDA = 0.34   // segundos da animação
 // Modo 2 celulares: cada slot guarda o id do controle daquele jogador (ou null,
 // quando aquele jogador ainda não escaneou — aí qualquer controle pode jogar).
 const controladores = { 1: null, 2: null }
+const vistoEm = {}            // id → instante do último sinal de vida
+const VAGA_OCIOSA_MS = 8000   // sem batimento por tanto tempo, a vaga é reciclada
 
 // trackers de uma tacada
 let firstContact = null
@@ -290,10 +292,20 @@ function podeJogar(id) {
 
 function onJoin(id) {
   if (id == null) return
+  const agora = performance.now()
+  vistoEm[id] = agora
+
   if (controladores[1] !== id && controladores[2] !== id) {
     if (controladores[1] == null) controladores[1] = id
     else if (controladores[2] == null) controladores[2] = id
-    else return // já tem dois; ignora extras
+    else {
+      // Ambas as vagas ocupadas: fica com a de quem parou de dar sinal (saiu ou
+      // recarregou a página, voltando com outro id). Senão, ignora o extra.
+      const ocioso = (slot) => agora - (vistoEm[controladores[slot]] || 0) > VAGA_OCIOSA_MS
+      if (ocioso(1)) controladores[1] = id
+      else if (ocioso(2)) controladores[2] = id
+      else return
+    }
   }
   const player = controladores[1] === id ? 1 : 2
   enviar(serializeAssign(id, player))
@@ -373,7 +385,9 @@ function enviarTurno() {
     player: regras.turn,
     group: regras.open ? null : regras.groups[regras.turn],
     ballInHand: regras.ballInHand,
-    phase: regras.phase,
+    // 'espera' avisa o celular que a partida ainda não começou (Jogador 1
+    // escolhe a aparência); depois vale a fase das regras.
+    phase: fase === 'espera' ? 'espera' : regras.phase,
     winner: regras.winner,
     controllerId: controladores[regras.turn],   // celular dono da vez (ou null)
   }))
