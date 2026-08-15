@@ -4,7 +4,9 @@ import { parseMessage } from '../shared/protocol.js'
 import {
   criarPlacar, registrarUltrapassagem, inserirNoRanking, ehRecorde, formatarPontos,
 } from '../shared/scoring.js'
-import { carregarModelos, criarMoto, pegarCarro, pegarCaminhao } from './models.js'
+import {
+  carregarModelos, criarMoto, girarRodas, descartarMoto, pegarCarro, pegarCaminhao,
+} from './models.js'
 import { criarCenario, FAIXAS, LIMITE_X } from './cenario.js'
 import { criarMotor } from './audio.js'
 
@@ -37,6 +39,8 @@ let tempoCorrida = 0
 let tempoSpawn = 0
 let placar = criarPlacar()
 let periodo = 'dia'
+let motoEscolhida = 'classica'  // id da moto pedido pelo celular (setup.moto)
+let trocandoMoto = false        // um swap de moto em andamento (evita duplicar)
 let qrAberto = false
 
 // ------------------------------------------------------------------ cena 3D
@@ -217,6 +221,38 @@ function recolherVeiculos() {
     v.contado = false
     v.objeto.visible = false
     v.objeto.position.z = Z_SPAWN
+  }
+}
+
+/**
+ * Troca a moto do jogador pela que o celular escolheu. Só acontece nas telas
+ * paradas (espera/fim) — no meio da corrida a moto atual segue. A antiga é
+ * descartada (removida da cena e devolvida à GPU) antes de a nova entrar, então
+ * há sempre uma só moto viva. Como criarMoto é assíncrona (o GLB pode pesar 1
+ * MB), o laço reconfere no fim: se o jogador trocou de novo durante a carga,
+ * carrega a última escolha — sem empilhar swaps nem deixar moto órfã.
+ */
+async function trocarMoto(id) {
+  motoEscolhida = id
+  if (estado !== 'aguardando' && estado !== 'crashed') return
+  if (trocandoMoto) return
+  if (moto && moto.userData.moto === id) return
+  trocandoMoto = true
+  try {
+    let alvo
+    do {
+      alvo = motoEscolhida
+      const nova = await criarMoto(alvo)
+      if (moto) descartarMoto(moto)
+      moto = nova
+      moto.position.set(0, 0, 0)
+      moto.rotation.set(0, 0, 0)
+      scene.add(moto)
+      cenario.farolMoto = moto.userData.farol
+      cenario.definirPeriodo(periodo)   // reacende o farol conforme dia/noite
+    } while (alvo !== motoEscolhida && (estado === 'aguardando' || estado === 'crashed'))
+  } finally {
+    trocandoMoto = false
   }
 }
 
@@ -427,7 +463,11 @@ function connectWs() {
       acelerando = m.ativo
       talvezComecar()
     } else if (m.type === 'setup') {
-      if (estado !== 'carregando') definirPeriodo(m.periodo)
+      if (estado !== 'carregando') {
+        definirPeriodo(m.periodo)
+        // moto ausente/desconhecida (null) usa a clássica, a padrão.
+        trocarMoto(m.moto || 'classica')
+      }
     } else if (m.type === 'action') {
       comando(m.name)
     }
@@ -484,6 +524,7 @@ function passo(dt) {
   moto.rotation.y = -inclinacao * 0.10
 
   cenario.atualizar(velocidade * dt)
+  girarRodas(moto, velocidade * dt)   // rodas giram conforme a moto anda
 
   // tráfego: vem de frente, então a aproximação soma as duas velocidades
   const dzTrafego = (velocidade + VEL_TRAFEGO) * dt
@@ -560,7 +601,7 @@ async function iniciar() {
   })
 
   cenario = criarCenario(scene, periodo)
-  moto = await criarMoto()
+  moto = await criarMoto(motoEscolhida)
   scene.add(moto)
   cenario.farolMoto = moto.userData.farol
   cenario.definirPeriodo(periodo)

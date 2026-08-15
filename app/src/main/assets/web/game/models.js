@@ -54,6 +54,10 @@ const _centro = new THREE.Vector3()
 /**
  * Escala o objeto para um tamanho alvo e o embrulha num grupo cujo (0,0,0)
  * fica no chão, no centro do veículo. `eixo` diz qual dimensão vira a medida.
+ *
+ * Devolve também a `raiz` (com `matrixWorld` já atualizada) e a `escala`
+ * aplicada: quem precisa achar uma peça DENTRO do modelo (as rodas da moto) ou
+ * medir algo já na escala final lê daqui, sem refazer conta.
  */
 function normalizar(raiz, alvo, eixo) {
   _caixa.setFromObject(raiz)
@@ -75,8 +79,11 @@ function normalizar(raiz, alvo, eixo) {
 
   const grupo = new THREE.Group()
   grupo.add(raiz)
+  grupo.updateMatrixWorld(true)
   return {
     objeto: grupo,
+    raiz,
+    escala,
     largura: _tamanho.x,
     altura: _tamanho.y,
     profundidade: _tamanho.z,
@@ -138,11 +145,12 @@ export function definirLuzesVeiculos(ligadas) {
 
 // --------------------------------------------------------------------- carga
 
-function carregarUm(loader, nome) {
+/** Carrega um GLB por URL. Falha (404, arquivo corrompido) devolve null. */
+function carregarGlb(loader, url) {
   return new Promise((resolve) => {
     try {
       loader.load(
-        `/models/${nome}.glb`,
+        url,
         (gltf) => resolve(gltf.scene),
         undefined,
         () => resolve(null), // 404 (o modelo é opcional) não derruba o jogo
@@ -151,6 +159,10 @@ function carregarUm(loader, nome) {
       resolve(null)
     }
   })
+}
+
+function carregarUm(loader, nome) {
+  return carregarGlb(loader, `/models/${nome}.glb`)
 }
 
 /**
@@ -237,7 +249,89 @@ export function pegarCenario(nome) {
   }
 }
 
-// ----------------------------------------------------------------- a MOTO
+// ---------------------------------------------------------------- as MOTOS
+
+/**
+ * Catálogo de motos selecionáveis (o celular manda o id no `setup`).
+ *
+ * A NORMALIZAÇÃO é o mecanismo principal, igual para todas: escala pelo
+ * COMPRIMENTO (uma moto tem de ser visivelmente menor e mais estreita que um
+ * carro de 3,7), meia volta quando o modelo nasce olhando para +Z (o jogo anda
+ * para -Z e a câmera fica atrás, então o jogador vê a traseira) e translação
+ * para o centro em X/Z e as rodas em y=0. Tudo sai da bounding box medida.
+ *
+ * Em cima disso, cada moto traz uns poucos ajustes: onde fica o assento e a
+ * lanterna. São FRAÇÕES da caixa normalizada (x=0 é o centro; z>0 é a traseira,
+ * porque o nariz aponta para -Z), então acompanham a escala sozinhas — não são
+ * offsets em unidades de mundo chutados para um tamanho específico. A clássica,
+ * desenhada no código, dá o assento como ponto exato no seu próprio modelo.
+ */
+
+// Ponto onde o piloto encosta o traseiro na moto clássica: é a origem em que
+// ele foi desenhado. Serve de assento exato só para ela.
+const ASSENTO_CLASSICA = [0, 0.99, 0.30]
+
+// Altura normalizada da moto clássica (medida uma vez). O piloto foi desenhado
+// no tamanho dela, então escala pela razão de altura: moto mais baixa recebe
+// piloto proporcionalmente menor, senão as pernas ficam penduradas fora.
+const ALTURA_REF = 1.13
+
+const CATALOGO_MOTOS = {
+  classica: {
+    rotulo: 'Clássica',
+    // Desenhada no código, já com o nariz em -Z e as rodas em y=0.
+    assentoModelo: ASSENTO_CLASSICA,
+  },
+  sk: {
+    rotulo: 'Esportiva',
+    arquivo: '/models/motos/sk-bike.glb',
+    // Rodas dianteira (z=+1,08) e traseira (z=-0,74): a frente nasce em +Z.
+    frenteZ: 1,
+    texturas: {
+      map: '/models/motos/bike01_BC.jpg',
+      normalMap: '/models/motos/bike01_N.jpg',
+      roughnessMap: '/models/motos/bike01_R.jpg',
+      metalnessMap: '/models/motos/bike01_M.jpg',
+    },
+    rodas: ['SK_rsg_LastGuns_bike_Front_Wheel', 'SK_rsg_LastGuns_bike_Back_Wheel'],
+    // Assento (banco a ~50% da altura, um tico atrás do centro) e lanterna
+    // (rabeta, mais alta e bem na traseira) como frações da caixa.
+    assento: { y: 0.50, z: 0.08 },
+    lanterna: { y: 0.54, z: 0.42 },
+    // A carenagem dianteira alta infla a altura da caixa; o piloto encolhe um
+    // pouco para não ficar gigante em cima do banco.
+    escalaPiloto: 0.9,
+    // Guidão de moto naked fica alto: o piloto senta mais ereto.
+    inclinacaoPiloto: 0.26,
+  },
+  kawasaki: {
+    rotulo: 'Ninja',
+    arquivo: '/models/motos/kawasaki.glb',
+    // Malha única sem UV: o nariz do modelo já aponta para -Z.
+    frenteZ: -1,
+    // Sem textura embutida: só resta pintura. Verde Ninja com um emissivo
+    // baixinho para a silhueta não sumir de noite.
+    pintura: {
+      color: 0x5fc94b, metalness: 0.6, roughness: 0.35, emissive: 0x0b2a12,
+    },
+    // Esportiva baixa: o vão do tanque/banco fica no centro da caixa, então o
+    // assento é quase central. Carenagem agressiva pede o piloto debruçado.
+    assento: { y: 0.58, z: 0.02 },
+    lanterna: { y: 0.60, z: 0.44 },
+    inclinacaoPiloto: -0.05,
+  },
+}
+
+export const MOTOS_DISPONIVEIS = Object.keys(CATALOGO_MOTOS)
+export const MOTO_PADRAO = 'classica'
+
+// Comprimento alvo da moto em unidades de mundo (o carro tem 3,7).
+const COMPRIMENTO_MOTO = 2.05
+
+// Hitbox da moto: bem mais estreita que a caixa desenhada (guidão e
+// retrovisores não podem matar) e quase do comprimento inteiro.
+const FOLGA_MOTO_X = 0.75
+const FOLGA_MOTO_Z = 0.92
 
 // Materiais da moto: criados uma vez, compartilhados entre as peças.
 const MAT = {
@@ -281,10 +375,11 @@ function caixa(w, h, d, material, x, y, z) {
 }
 
 /**
- * Moto esportiva desenhada no código. A câmera fica ATRÁS, então o que precisa
- * ler bem é a traseira: rabeta erguida, lanterna vermelha, escapamentos, o
- * piloto debruçado e as pontas do guidão/retrovisores aparecendo de lado.
- * O nariz aponta para -Z (o sentido em que a moto anda).
+ * Moto clássica desenhada no código, SEM o piloto (ele é montado à parte para
+ * poder sentar em qualquer uma das motos). A câmera fica ATRÁS, então o que
+ * precisa ler bem é a traseira: rabeta erguida, lanterna vermelha, escapamentos
+ * e as pontas do guidão/retrovisores aparecendo de lado. O nariz aponta para
+ * -Z (o sentido em que a moto anda).
  */
 function motoProcedural() {
   const moto = new THREE.Group()
@@ -377,7 +472,22 @@ function motoProcedural() {
   add(farol)
   add(caixa(0.15, 0.06, 0.04, MAT.lanterna, 0, 1.06, 0.92))
 
-  // --- piloto debruçado sobre o tanque
+  return moto
+}
+
+/**
+ * Piloto debruçado sobre o tanque, montado com a ORIGEM NO ASSENTO. As peças
+ * seguem as coordenadas em que ele foi desenhado (sobre a moto clássica); um
+ * grupo interno desloca tudo para o assento cair em (0,0,0). Assim basta
+ * posicionar o piloto no assento de qualquer moto para ele sentar direito.
+ */
+function pilotoProcedural() {
+  const piloto = new THREE.Group()
+  const interno = new THREE.Group()
+  interno.position.set(-ASSENTO_CLASSICA[0], -ASSENTO_CLASSICA[1], -ASSENTO_CLASSICA[2])
+  piloto.add(interno)
+  const add = (m) => { interno.add(m); return m }
+
   const tronco = caixa(0.34, 0.48, 0.28, MAT.macacao, 0, 1.16, 0.16)
   tronco.rotation.x = -0.6
   add(tronco)
@@ -400,38 +510,212 @@ function motoProcedural() {
     add(cilindroEntre(lado * 0.23, 0.78, 0.06, lado * 0.21, 0.48, 0.26, 0.06, MAT.macacao))
   }
 
-  return moto
+  return piloto
+}
+
+// ------------------------------------------------------- motos vindas de GLB
+
+/** Textura do disco: `cor` marca as que carregam cor (sRGB) e não dados. */
+function carregarTextura(loader, url, cor) {
+  return new Promise((resolve) => {
+    try {
+      loader.load(url, (t) => {
+        t.colorSpace = cor ? THREE.SRGBColorSpace : THREE.NoColorSpace
+        t.flipY = false           // as UVs vêm do GLB, que usa origem no topo
+        t.anisotropy = 4
+        resolve(t)
+      }, undefined, () => resolve(null))
+    } catch (e) {
+      resolve(null)
+    }
+  })
+}
+
+/** Material da moto com os quatro mapas do disco (base, normal, rugosidade, metal). */
+async function materialTexturizado(cfg, descartaveis) {
+  const loader = new THREE.TextureLoader()
+  const t = cfg.texturas
+  const [map, normalMap, roughnessMap, metalnessMap] = await Promise.all([
+    carregarTextura(loader, t.map, true),
+    carregarTextura(loader, t.normalMap, false),
+    carregarTextura(loader, t.roughnessMap, false),
+    carregarTextura(loader, t.metalnessMap, false),
+  ])
+  for (const tex of [map, normalMap, roughnessMap, metalnessMap]) {
+    if (tex) descartaveis.push(tex)
+  }
+  // Com mapa, o fator vira multiplicador: 1 deixa o mapa mandar sozinho.
+  const material = new THREE.MeshStandardMaterial({
+    map,
+    normalMap,
+    roughnessMap,
+    metalnessMap,
+    color: map ? 0xffffff : 0x8d94a3,
+    roughness: roughnessMap ? 1 : 0.45,
+    metalness: metalnessMap ? 1 : 0.5,
+  })
+  descartaveis.push(material)
+  return material
+}
+
+/** Material da moto sem textura nenhuma: pintura metálica de uma cor só. */
+function materialPintado(cfg, descartaveis) {
+  const material = new THREE.MeshStandardMaterial(cfg.pintura)
+  descartaveis.push(material)
+  return material
 }
 
 /**
- * Devolve a moto do jogador. Se existir /models/moto.glb, ele manda; senão a
- * moto é construída no código. Em qualquer caso o resultado tem o mesmo
- * contrato: grupo com origem no chão, nariz em -Z e um farol (SpotLight) que
- * o cenário noturno acende.
+ * Carrega o GLB da moto, troca todos os materiais pelo nosso (os modelos vêm
+ * sem textura embutida) e normaliza pela bounding box.
  */
-export async function criarMoto() {
-  const loader = new GLTFLoader()
-  const cena = await carregarUm(loader, 'moto')
+async function montarMotoGlb(cfg, descartaveis) {
+  const cena = await carregarGlb(new GLTFLoader(), cfg.arquivo)
+  if (!cena) return null
 
-  let moto
-  if (cena) {
-    otimizarMateriais(cena)
-    // Se veio do disco, a frente do modelo (+Z, padrão do kit) tem de virar -Z.
-    cena.rotation.y = Math.PI
-    moto = normalizar(cena, 2.2, 'z').objeto
-  } else {
-    moto = motoProcedural()
+  const material = cfg.texturas
+    ? await materialTexturizado(cfg, descartaveis)
+    : materialPintado(cfg, descartaveis)
+
+  cena.traverse((n) => {
+    if (!n.isMesh) return
+    n.castShadow = false
+    n.receiveShadow = false
+    n.frustumCulled = true
+    // Os materiais que vieram do GLTF morrem aqui: ninguém mais aponta para eles.
+    for (const m of (Array.isArray(n.material) ? n.material : [n.material])) {
+      if (m) m.dispose()
+    }
+    n.material = material
+  })
+
+  // O jogo anda para -Z; modelo que nasce olhando para +Z leva meia volta.
+  if (cfg.frenteZ > 0) cena.rotation.y = Math.PI
+  return normalizar(cena, COMPRIMENTO_MOTO, 'z')
+}
+
+/**
+ * Acha as malhas de roda pelo nome e mede o raio de cada uma na escala final.
+ * Girar em torno do +X local (a roda é um cilindro com o eixo em X e o centro
+ * na origem do próprio nó) faz o pneu rodar no lugar.
+ */
+function acharRodas(raiz, cfg) {
+  const rodas = []
+  for (const nome of cfg.rodas || []) {
+    const objeto = raiz.getObjectByName(nome)
+    if (!objeto) continue
+    _caixa.setFromObject(objeto)
+    _caixa.getSize(_tamanho)
+    const raio = Math.max(_tamanho.y, _tamanho.z) / 2
+    if (raio > 0.01) rodas.push({ objeto, raio })
+  }
+  return rodas
+}
+
+const _ponto = new THREE.Vector3()
+
+/** Leva um ponto medido no modelo para as coordenadas finais da moto. */
+function pontoDoModelo(raiz, p) {
+  return _ponto.set(p[0], p[1], p[2]).applyMatrix4(raiz.matrixWorld)
+}
+
+/**
+ * Onde o piloto senta, em coordenadas já normalizadas. A clássica dá um ponto
+ * exato no seu modelo; as de GLB dão frações da caixa (x=0 centro, z>0 traseira).
+ */
+function pontoAssento(cfg, raiz, largura, altura, profundidade) {
+  if (cfg.assentoModelo) return pontoDoModelo(raiz, cfg.assentoModelo).clone()
+  const f = cfg.assento || { y: 0.5, z: 0.05 }
+  return new THREE.Vector3(0, altura * f.y, profundidade * (f.z || 0))
+}
+
+/**
+ * Devolve a moto do jogador já montada: modelo normalizado, piloto sentado,
+ * farol (SpotLight que o cenário noturno acende), lanterna e hitbox tirada da
+ * bounding box. `id` é um dos MOTOS_DISPONIVEIS; id desconhecido (ou GLB que
+ * não carregou) cai na moto clássica, desenhada no código.
+ */
+export async function criarMoto(id = MOTO_PADRAO) {
+  let cfg = CATALOGO_MOTOS[id] || CATALOGO_MOTOS[MOTO_PADRAO]
+  let escolhida = CATALOGO_MOTOS[id] ? id : MOTO_PADRAO
+  const descartaveis = []
+
+  let base = cfg.arquivo ? await montarMotoGlb(cfg, descartaveis) : null
+  if (!base) {
+    cfg = CATALOGO_MOTOS[MOTO_PADRAO]
+    escolhida = MOTO_PADRAO
+    base = normalizar(motoProcedural(), COMPRIMENTO_MOTO, 'z')
+  }
+
+  const { objeto: moto, raiz, largura, altura, profundidade } = base
+
+  // --- piloto no assento, escalado pela razão de altura da moto (bbox)
+  const assento = pontoAssento(cfg, raiz, largura, altura, profundidade)
+  const piloto = pilotoProcedural()
+  piloto.position.copy(assento)
+  piloto.scale.setScalar((altura / ALTURA_REF) * (cfg.escalaPiloto || 1))
+  // Guidão alto (naked) deixa o piloto ereto; carenagem (esportiva) o debruça.
+  piloto.rotation.x = cfg.inclinacaoPiloto || 0
+  moto.add(piloto)
+
+  // --- lanterna traseira (as motos de GLB não têm; a clássica já tem a dela)
+  if (cfg.lanterna) {
+    const geo = new THREE.PlaneGeometry(largura * 0.22, altura * 0.06)
+    const mat = new THREE.MeshBasicMaterial({ color: 0xff2222 })
+    descartaveis.push(geo, mat)
+    const lanterna = new THREE.Mesh(geo, mat)
+    lanterna.position.set(0, altura * cfg.lanterna.y, profundidade * cfg.lanterna.z)
+    moto.add(lanterna)      // plano nasce olhando para +Z, que é a câmera
   }
 
   // Um único SpotLight: à noite ele é o farol; de dia fica apagado.
   const farol = new THREE.SpotLight(0xfff0cc, 0, 46, 0.42, 0.55, 1.1)
-  farol.position.set(0, 0.85, -1.0)
+  farol.position.set(0, altura * 0.55, -profundidade / 2 + 0.08)
   const alvo = new THREE.Object3D()
   alvo.position.set(0, 0.0, -18)
   moto.add(alvo)
   farol.target = alvo
   moto.add(farol)
+
   moto.userData.farol = farol
-  moto.userData.hitbox = { w: 0.7, d: 1.9 }
+  moto.userData.moto = escolhida
+  moto.userData.rodas = acharRodas(raiz, cfg)
+  moto.userData.hitbox = { w: largura * FOLGA_MOTO_X, d: profundidade * FOLGA_MOTO_Z }
+  moto.userData.descartaveis = descartaveis
   return moto
+}
+
+/**
+ * Gira as rodas que são malhas separadas, proporcional à distância percorrida
+ * (ângulo = distância / raio). Motos de peça única simplesmente não têm rodas
+ * registradas e a chamada não faz nada.
+ */
+export function girarRodas(moto, distancia) {
+  const rodas = moto && moto.userData.rodas
+  if (!rodas || rodas.length === 0) return
+  for (const roda of rodas) {
+    // Andar para -Z (frente) roda o topo do pneu para -Z: rotação negativa em X.
+    const angulo = roda.objeto.rotation.x - distancia / roda.raio
+    roda.objeto.rotation.x = angulo % (Math.PI * 2)
+  }
+}
+
+/**
+ * Devolve à GPU tudo que era exclusivo desta moto. As geometrias sempre são
+ * (nenhuma moto compartilha malha com outra coisa); materiais e texturas só os
+ * que foram criados para ela — os MAT.* do desenho procedural são
+ * compartilhados e continuam vivos.
+ */
+export function descartarMoto(moto) {
+  if (!moto) return
+  if (moto.parent) moto.parent.remove(moto)
+  moto.traverse((n) => {
+    if (n.isMesh && n.geometry) n.geometry.dispose()
+  })
+  for (const recurso of moto.userData.descartaveis || []) {
+    if (recurso && typeof recurso.dispose === 'function') recurso.dispose()
+  }
+  moto.userData.descartaveis = []
+  moto.userData.rodas = []
+  moto.userData.farol = null
 }
