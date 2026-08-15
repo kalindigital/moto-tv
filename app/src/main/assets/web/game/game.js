@@ -22,7 +22,7 @@ import { criarMotor } from './audio.js'
 const VEL_INICIAL = 26          // unidades de mundo por segundo
 const VEL_CRUZEIRO = 34
 const VEL_TURBO = 60
-const VEL_TRAFEGO = 7           // o tráfego vem de frente: soma na velocidade relativa
+const VEL_TRAFEGO = 7           // trafego anda no mesmo sentido, mais devagar: a moto alcanca
 const VEL_LATERAL = 7.2
 const KMH_POR_UNIDADE = 5       // só para o velocímetro parecer de moto
 const Z_SPAWN = -110
@@ -54,7 +54,7 @@ const renderer = new THREE.WebGLRenderer({
   powerPreference: 'high-performance',
 })
 renderer.shadowMap.enabled = false
-let escalaRender = Number(localStorage.getItem('moto-tv.escala.v2')) || 0.9
+let escalaRender = Number(localStorage.getItem('moto-tv.escala.v3')) || 1
 
 function dimensionar() {
   camera.aspect = innerWidth / innerHeight
@@ -543,7 +543,7 @@ function passo(dt) {
   girarRodas(moto, velocidade * dt)   // rodas giram conforme a moto anda
 
   // tráfego: vem de frente, então a aproximação soma as duas velocidades
-  const dzTrafego = (velocidade + VEL_TRAFEGO) * dt
+  const dzTrafego = Math.max(4, velocidade - VEL_TRAFEGO) * dt
   const caixaMoto = moto.userData.hitbox
   for (const v of veiculos) {
     if (!v.ativo) continue
@@ -641,7 +641,7 @@ function medirFps(agora) {
     segurandoBaixo += decorrido
     if (segurandoBaixo >= 2000) {
       escalaRender = Math.max(0.6, Math.round((escalaRender - 0.1) * 100) / 100)
-      localStorage.setItem('moto-tv.escala.v2', String(escalaRender))
+      localStorage.setItem('moto-tv.escala.v3', String(escalaRender))
       dimensionar()
       segurandoBaixo = 0
     }

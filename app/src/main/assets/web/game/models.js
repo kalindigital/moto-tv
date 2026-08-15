@@ -243,6 +243,9 @@ function clonarVeiculo(lista, tipo) {
   const base = lista[(Math.random() * lista.length) | 0]
   const objeto = base.objeto.clone(true)
   adicionarLuzes(objeto, base.largura, base.altura, base.profundidade)
+  // O tráfego anda no MESMO sentido que a moto: vemos a traseira dos veículos
+  // (e, à noite, as lanternas vermelhas em vez dos faróis).
+  objeto.rotation.y += Math.PI
   return {
     nome: base.nome,
     tipo,
