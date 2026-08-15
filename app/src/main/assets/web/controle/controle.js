@@ -140,6 +140,8 @@ document.getElementById('periodos').addEventListener('click', (e) => {
 
 botaoComecar.addEventListener('click', async () => {
   botaoComecar.disabled = true
+  // Wake Lock também exige gesto do usuário — aproveitamos este mesmo clique.
+  manterTelaAcesa()
   // A permissão do iOS precisa nascer de um gesto do usuário — este clique.
   const permitido = await pedirPermissaoMovimento()
   botaoComecar.disabled = false
@@ -191,6 +193,25 @@ document.getElementById('reiniciar').addEventListener('click', () => {
 
 document.getElementById('qr').addEventListener('click', () => {
   enviar(serializeAction('qr'))
+})
+
+// Segurar o celular inclinado não conta como toque: sem isso a tela apaga no meio
+// da partida e o controle cai junto. O Wake Lock é liberado pelo próprio sistema
+// quando a aba sai de foco, então pedimos de novo ao voltar.
+let travaDeTela = null
+
+async function manterTelaAcesa() {
+  if (!('wakeLock' in navigator)) return
+  try {
+    travaDeTela = await navigator.wakeLock.request('screen')
+    travaDeTela.addEventListener('release', () => { travaDeTela = null })
+  } catch {
+    travaDeTela = null
+  }
+}
+
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible' && travaDeTela === null) manterTelaAcesa()
 })
 
 connect()

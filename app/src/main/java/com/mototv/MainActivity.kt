@@ -4,6 +4,7 @@ import android.annotation.SuppressLint
 import android.app.Activity
 import android.net.http.SslError
 import android.os.Bundle
+import android.view.WindowManager
 import android.webkit.JavascriptInterface
 import android.webkit.SslErrorHandler
 import android.webkit.WebView
@@ -33,6 +34,9 @@ class MainActivity : Activity() {
         super.onCreate(savedInstanceState)
 
         updates = UpdateService(applicationContext)
+
+        // O jogo não recebe toque na TV: sem isso a tela apaga no meio da partida.
+        window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
 
         webView = WebView(this).apply {
             settings.javaScriptEnabled = true
