@@ -1,0 +1,13 @@
+colormap.png — NAO e o arquivo original da Kenney.
+
+Os GLB do Car Kit referenciam a textura externa "Textures/colormap.png", que nao
+veio junto com os modelos baixados. Sem ela o GLTFLoader falha ao carregar a
+textura e os veiculos ficam sem pintura.
+
+Este arquivo e um atlas de paleta gerado aqui (256x256, 16 colunas com gradiente
+vertical), montado a partir da leitura das coordenadas UV dos proprios modelos:
+o u fica sempre em (coluna + 0.5) / 16 e o v varia continuamente dentro da
+coluna. A coluna 5 e uma escala de cinza porque e a usada por pneus e aros.
+
+Se um dia o colormap.png original da Kenney entrar no repositorio, basta
+substituir este arquivo: nenhum codigo depende das cores escolhidas aqui.
