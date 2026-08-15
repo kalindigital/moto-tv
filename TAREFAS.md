@@ -55,4 +55,17 @@ Plano em `docs/superpowers/specs/2026-08-15-sinuca-modo-multijogo-design.md`.
 - [x] Testes Vitest (billiards 15, pool-rules 17, cue-protocol 28) + JUnit segue verde (RouteResolver 7)
 - [x] Build `assembleDebug` e instalação na TV real via ADB (`installDebug`/`adb install`)
 - [x] Validado na TV: menu, render da mesa, quebra e detecção de falta
-- [ ] Validar na TV: 2 celulares (atribuição 1/2, trava por vez), animação da caçapa, tela de aparência sem corte
+- [x] Validar na TV: 2 celulares (atribuição 1/2, trava por vez), animação da caçapa, tela de aparência sem corte
+
+## Joguinhos — app multijogo (onda 4)
+- [x] App renomeado para **Joguinhos** (label do Android e títulos das páginas)
+- [x] TV virou vitrine: mostra os jogos e o QR; a escolha é toda no celular
+- [x] Entrada direta: escaneou o QR e já entra no jogo aberto como Jogador 1 ou 2
+- [x] Sinuca: modo **sozinho contra a máquina** ou **multiplayer** (QR para o Jogador 2)
+- [x] IA (`shared/pool-ai.js`) com níveis fácil/médio/difícil e "vacilo" — nunca infalível
+- [x] Efeito na branca: o celular mostra a bola e você toca onde o taco bate (curva, seguir, puxar)
+- [x] Bolas com rolamento 3D; ao parar, assentam com o número para cima
+- [x] Placar inferior com as bolas encaçapadas de cada lado
+- [x] Medidor de força no celular, vibração crescente ao puxar e vibração a cada pancada
+- [x] Testes: 157 verdes (billiards 22, pool-ai 13, cue-protocol 38 + demais), estáveis em execuções repetidas
+- [ ] Validar na TV: partida solo nos três níveis, efeito (curva/puxa), vibração no celular

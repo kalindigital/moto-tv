@@ -46,6 +46,35 @@ TV: /menu ─(escolha)→ /game (moto)  ou  /sinuca (8-ball, canvas 2D)
 - **controle/**: `controle.js` (seletor), `moto-controle.js` (moto, intacto +
   botão Sair), `sinuca-controle.js` (estilingue + aparência + lobby).
 
+## Onda 4 — Joguinhos: quem manda é o celular
+
+O app passou a se chamar **Joguinhos** (o `applicationId` continua `com.mototv`
+de propósito: trocá-lo quebraria a cadeia de auto-atualização e exigiria
+desinstalar o app de todas as TVs).
+
+- **A TV é vitrine**: mostra os jogos disponíveis e o QR, e nada é escolhido por
+  lá. O d-pad só confirma atualização.
+- **Entrada direta**: ao abrir o controle, o celular pede vaga (`join`) antes de
+  qualquer tela. Se já houver jogo aberto, ele entra na hora como Jogador 1 ou 2;
+  se não, mostra a lista de jogos.
+- **Sinuca — modo**: o Jogador 1 escolhe *sozinho* (contra a máquina, com
+  dificuldade fácil/médio/difícil) ou *multiplayer*, quando a TV exibe o QR para
+  o Jogador 2 entrar.
+- **Máquina** (`shared/pool-ai.js`): mira no ponto fantasma da caçapa mais
+  favorável, descartando trajetórias bloqueadas e cortes muito fechados. Cada
+  nível tem erro de mira, ruído de força e uma **chance de vacilo** — ela erra de
+  propósito, senão a partida não teria graça.
+- **Efeito (spin)**: o celular mostra a bola branca e o toque define onde o taco
+  bate. De lado a branca curva enquanto rola; em cima ela segue após o toque;
+  embaixo ela volta. A física está em `curvarPorEfeito` e `seguirOuPuxar`.
+- **Rolamento**: as bolas giram de verdade (número e faixa passeiam pela casca e
+  somem ao virar), e ao parar assentam com o número para cima — sem isso metade
+  da mesa ficava sem número visível e não dava para identificar as bolas.
+- **Placar inferior**: as bolas já encaçapadas de cada lado, com destaque de vez.
+- **Força e vibração**: barra de força no celular, vibração crescente enquanto o
+  taco é puxado e vibração a cada pancada (a TV avisa por `hit`). Em aparelhos
+  sem `navigator.vibrate` (iPhone) fica só o visual.
+
 ## Modo 2 celulares (lobby)
 
 - Cada celular gera um `id` (uuid) por carregamento. Ao entrar, manda `join(id)`;
